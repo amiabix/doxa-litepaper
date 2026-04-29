@@ -236,6 +236,7 @@ April 2026</p>
 <h2 id="table-of-contents">Table of Contents</h2>
 <ol type="1">
 <li><a href="#motivation">Motivation</a></li>
+<li><a href="#ecosystem-model">Ecosystem Model</a></li>
 <li><a href="#design-goals">Design Goals</a></li>
 <li><a href="#system-architecture">System Architecture</a></li>
 <li><a href="#protocol-objects">Protocol Objects</a></li>
@@ -288,37 +289,63 @@ Final correctness happens on-chain through proof verification.
 </blockquote>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="design-goals">2. Design Goals</h2>
+<h2 id="ecosystem-model">2. Ecosystem Model</h2>
+<p>Doxa is designed for a specific ecosystem: regulated institutions that need private settlement on public chains without fragmenting liquidity or losing compliance control. This section describes the participants, the value flow, and how the protocol fits into the broader stablecoin infrastructure.</p>
 
-<h3 id="settle-on-public-infrastructure">2.1 Settle on Public Infrastructure</h3>
+<h3 id="regulated-subpools">2.1 Regulated Subpools</h3>
+<p>Each subpool is operated by a regulated entity: a bank, a payment processor, a licensed fintech, or a stablecoin issuer. The operator controls its own users, compliance policies, and data. It runs KYC/KYB onboarding, sanctions screening, transaction monitoring, and Travel Rule compliance through its existing systems, entirely off-chain. The protocol enforces the operator's authority cryptographically through the approval gate (described in Section 5.8 and Section 12), but the compliance logic itself belongs to the operator.</p>
+<p>Multiple subpools share the same settlement contract. Each subpool's accounts and transactions are policy-isolated (governed by that subpool's approval key), but they all settle into the same on-chain Merkle tree. This means every subpool's users benefit from the unified anonymity set: an observer cannot distinguish which subpool a given commitment belongs to by looking at the on-chain state.</p>
+
+<h3 id="isolated-compliance-interoperable-settlement">2.2 Isolated Compliance, Interoperable Settlement</h3>
+<p>Subpools are legally and operationally independent. Bank A's compliance obligations, user records, and policy decisions are invisible to Bank B. But because both subpools settle through the same contract, a user in Bank A's subpool can send a private note to a user in Bank B's subpool. The settlement contract does not need to know that the transfer crossed institutional boundaries. Both operators retain approval authority over their own users' transactions through the in-circuit approval signature, so neither institution loses control.</p>
+
+<h3 id="stablecoin-issuance">2.3 Private Issuance and Redemption</h3>
+<p>A stablecoin issuer can operate a dedicated treasury subpool within the settlement contract. The issuer mints stablecoins on the public chain (preserving public auditability of total supply) and rebalances between its public treasury and its private treasury subpool to support private issuance and redemption. When an institution needs to fund user accounts, the issuer deposits from its treasury subpool into the settlement contract. When users or institutions need to exit, the reverse flow moves value from the shielded system back to the public treasury. The public chain always reflects the total escrowed supply; the private system handles the allocation.</p>
+
+<h3 id="payment-flows">2.4 Designed for Payment Flows</h3>
+<p>The batching model (64 private transactions per batch, 512 output commitments per settlement) is designed for high-throughput, low-cost payment settlement. Each batch amortizes the on-chain verification cost across all included transactions. The fixed-shape proof pipeline allows predictable proving times. The two-phase settlement model allows the coordinator to commit batches continuously while provers work asynchronously. These properties make the protocol suitable for institutional and retail payment flows where latency is measured in minutes (batch accumulation plus proving time) rather than the seconds of a public chain transfer, but where privacy and compliance are requirements that public transfers cannot satisfy.</p>
+
+<h3 id="public-chain-native">2.5 Public-Chain Native</h3>
+<p>Doxa operates on the public chain directly and inherits its security guarantees. The settlement contract holds escrowed tokens, verifies proofs, and stores roots and nullifiers on the same chain where the monitored token lives. There is no bridge, no sidechain, no separate validator set. Counterparty risk is limited to the smart contract itself (which can be audited and formally verified) rather than to an external consensus mechanism. The architecture generalizes to any EVM-compatible chain with BN254 precompiles, and in principle to any chain that supports token escrow and proof verification.</p>
+
+<h3 id="public-defi-access">2.6 Public DeFi Access</h3>
+<p>Value that exits the shielded system through a withdrawal returns to a standard public address as a regular ERC-20 balance. From that point it is fully composable with public DeFi: lending protocols, decentralized exchanges, yield aggregators, and any other on-chain application. Because Doxa settles on the same chain as the token itself, there is no liquidity fragmentation between the private settlement layer and the public ecosystem. Users and institutions can move between private settlement and public DeFi as their needs require.</p>
+
+<h3 id="figure-ecosystem">Figure: Ecosystem Model</h3>
+
+<!-- ════════════════════════════════════════════════════ -->
+<h2 id="design-goals">3. Design Goals</h2>
+<p>The ecosystem model above describes the participants and value flows. This section states the engineering properties that the protocol must satisfy to support that model.</p>
+
+<h3 id="settle-on-public-infrastructure">3.1 Settle on Public Infrastructure</h3>
 <p>Doxa settles on public blockchain infrastructure rather than requiring participants to join a private network. The public chain provides token escrow, proof verification, root history, nullifier tracking, and transparent settlement events. Private computation happens off-chain; final validity is enforced by the contract. The current implementation targets the EVM using BN254/Groth16 verification and Poseidon hashing over Goldilocks field elements, but the architecture generalizes to any chain with an escrow surface and a proof verifier.</p>
 
-<h3 id="minimize-public-state">2.2 Minimize Public State</h3>
+<h3 id="minimize-public-state">3.2 Minimize Public State</h3>
 <p>The settlement contract never learns note contents, account balances, customer identities, transaction witnesses, or subpool review data. It receives compact commitments and proof outputs. It verifies that the proof corresponds to the submitted batch commitment, updates the global state root, marks nullifiers as used, and nothing more. The public chain sees token escrow movements, batch commitments, nullifier insertions, and root transitions. It does not see the private business meaning behind any of them.</p>
 
-<h3 id="separate-policy-from-settlement">2.3 Separate Policy from Settlement</h3>
+<h3 id="separate-policy-from-settlement">3.3 Separate Policy from Settlement</h3>
 <p>Doxa is not a compliance oracle. It gives institutions a policy boundary before transactions enter the shared settlement flow. A subpool can run its own user database, approval service, monitoring workflow, audit log, and note delivery process. The protocol commits to subpool membership and approval authority, but it does not decide who satisfies an institution's policy. This separation is important for legal and operational clarity: Doxa provides proof-backed settlement infrastructure, and institutions remain responsible for their regulated workflows.</p>
 
-<h3 id="use-fixed-shape-batches">2.4 Use Fixed-Shape Batches</h3>
+<h3 id="use-fixed-shape-batches">3.4 Use Fixed-Shape Batches</h3>
 <p>User activity is variable; proof circuits are easier to aggregate when they have a fixed shape. Doxa converts variable activity into fixed-size batches by padding unused slots with dummy proofs. Private transaction batches contain 64 proof slots, each contributing one output account commitment and seven output note commitments, for a total of 512 output commitments per batch. Bridge transaction batches contain 256 withdrawal slots and 256 deposit slots, each contributing one output account commitment, also totaling 512 per batch. The uniform 512-leaf batch subtree is a key design point: it gives the prover and contract a consistent binding object.</p>
 
-<h3 id="make-state-reconstructible">2.5 Make State Reconstructible</h3>
+<h3 id="make-state-reconstructible">3.5 Make State Reconstructible</h3>
 <p>Confirmed state must be reconstructible from chain-authoritative data alone. The state service can replay proven batch events, fetch the original submission calldata, extract the batch root and nullifiers, and rebuild the local tree and nullifier set from scratch. Loss of a coordinator database cannot let anyone forge state. It may delay service, but confirmed roots and nullifiers remain derivable from the public contract.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="system-architecture">3. System Architecture</h2>
+<h2 id="system-architecture">4. System Architecture</h2>
 <p>The design goals above shape an architecture with a clear separation between off-chain computation and on-chain verification. This section introduces the participants, traces a transaction from deposit through finalization, and defines the visibility boundary between them.</p>
 
-<h3 id="participants-and-components">3.1 Participants and Components</h3>
+<h3 id="participants-and-components">4.1 Participants and Components</h3>
 <p>Figure 1 shows the five active participants in the settlement flow, labeled A through E. The left side of the diagram is off-chain; the right side is on-chain. Two supporting components (the state indexer and the monitored token) are not shown in the diagram but complete the architecture.</p>
 <p><strong>(A) User</strong> is the wallet and client layer. The user holds all account secrets, note secrets, and authorization keys. The user builds transactions, collects signatures from the subpool, and generates ZK proofs locally. In normal operation the user does not interact with the public chain directly; the institution handles deposits (step ⓪) and the coordinator handles settlement (steps ③ through ⑤).</p>
 <p><strong>(B) Subpool</strong> is the institutional entry point, combining a policy database with an operator service. It validates incoming transaction requests against institutional policy, including onboarding status, compliance checks, and transaction limits, then forwards approved artifacts to the coordinator.</p>
 <p><strong>(C) Coordinator</strong> is the operator role responsible for batch construction. It receives approved artifacts from one or more subpools, orders them into fixed-size batches, pads unused slots with dummy proofs, and submits the resulting batch preimage to the settlement contract in Phase 1. The coordinator may also submit Phase 2 in practice, but Phase 2 is permissionless by contract design. The coordinator controls liveness and ordering, not validity.</p>
-<p><strong>(D) Prover</strong> operates off-chain and asynchronously. It receives the batch preimage and the per-slot proof artifacts (the Plonky2 proofs already generated by user clients), runs the aggregation pipeline described in Section 9, and produces a single Groth16 proof bound to the stored PI commitment. The prover never sees private witnesses; those remain with the user clients that generated the leaf proofs.</p>
+<p><strong>(D) Prover</strong> operates off-chain and asynchronously. It receives the batch preimage and the per-slot proof artifacts (the Plonky2 proofs already generated by user clients), runs the aggregation pipeline described in Section 10, and produces a single Groth16 proof bound to the stored PI commitment. The prover never sees private witnesses; those remain with the user clients that generated the leaf proofs.</p>
 <p><strong>(E) Doxa Settlement Contract</strong> is the on-chain component. It escrows the monitored token, stores deposit records and pending batch commitments, verifies Groth16 proofs, checks nullifier freshness, appends proven batch roots to an incremental Poseidon Merkle tree, and records confirmed tree roots in a historical mapping. The contract also maintains a global nullifier set that prevents double-spending.</p>
 <p>The <strong>state indexer</strong> mirrors confirmed roots, batch roots, nullifiers, leaf indices, and deposit status from chain events, and can be run independently by any party. The <strong>monitored token</strong> is the single ERC-20 token that a given contract deployment escrows.</p>
 
-<h3 id="end-to-end-flow">3.2 End-to-End Flow</h3>
+<h3 id="end-to-end-flow">4.2 End-to-End Flow</h3>
 <p>Settlement proceeds through six steps, shown in Figure 1. Step ⓪ is a direct institution-to-contract interaction for depositing value (on-chain). Steps ① and ② are off-chain interactions between the user, subpool, and coordinator. Steps ③ through ⑤ cross the on-chain boundary for batch submission, proving, and finalization.</p>
 <p><strong>⓪ Deposit and withdrawal.</strong> The institution interacts with the settlement contract directly to escrow the monitored token. To deposit, the institution constructs a deposit note commitment addressed to a specific user account within its subpool and locks tokens with the contract. To withdraw a pending deposit before it has been validated, the recorded recipient calls the contract. Deposits are the bridge between public token balances and the shielded system; in the typical flow, the institution manages all on-chain token operations.</p>
 <p><strong>① Private transaction request.</strong> The user's client builds the transaction and sends a signature request to the subpool via the subpool's transaction endpoint. The subpool evaluates the request against institutional policy (onboarding status, compliance requirements, transaction limits) and, if approved, signs the transaction hash with its approval key. The user's client then generates the Plonky2 proof locally with the approval signature as part of the witness. This is the computationally intensive step.</p>
@@ -332,12 +359,12 @@ Final correctness happens on-chain through proof verification.
 <figcaption style="font-size:15px;font-style:italic;margin-top:8px">Figure 1. System architecture and two-phase settlement: an operator-gated commit, an off-chain proof, a permissionless finalization.</figcaption>
 </figure>
 
-<h3 id="visibility-boundaries">3.3 Visibility Boundaries</h3>
+<h3 id="visibility-boundaries">4.3 Visibility Boundaries</h3>
 <p>The coordinator sees only the public inputs of each proof: referenced roots, the real-or-dummy flag, nullifiers, and output commitments. It does not see private witnesses, account identifiers, note plaintext, balances, or customer records. If a deployment gives the coordinator more information, that is a deployment choice, not a protocol requirement.</p>
 <p>The subpool's visibility is a product decision. A subpool may see only proof artifacts and policy metadata, or it may operate a full institutional backend with user records, note delivery, viewing information, and audit records. The settlement contract is not the compliance system; the subpool is.</p>
 <p>The public chain sees token escrow movements, pending and confirmed batch commitments, proof verification results, consumed nullifiers, appended batch roots, and deposit status transitions. It does not see note plaintext, private account state, account balances, counterparty identities, or subpool-local policy decisions.</p>
 
-<h3 id="user-lifecycle">3.4 Lifecycle: From Onboarding to Transfer</h3>
+<h3 id="user-lifecycle">4.4 Lifecycle: From Onboarding to Transfer</h3>
 <p>To make the architecture concrete, consider an institution operating subpool A, a user Alice onboarded to that subpool, and a user Bob in subpool B. The lifecycle proceeds in five stages.</p>
 <p><strong>Onboarding and account creation.</strong> Alice registers with the institution operating subpool A through whatever process the institution requires (KYC, onboarding, agreements). The institution's subpool service then facilitates account creation: Alice's client generates a private identifier, derives authorization keys, and produces a zero-knowledge proof that transitions a fresh account (nonce 0, no keys) into an initialized account (nonce 1, spend and consume keys set). The account is permanently bound to subpool A's subpool_id, which is embedded in the account commitment and cannot change. This binding is enforced in-circuit: every future transaction proof verifies that the account's subpool_id matches the approval key registered in the main pool configuration tree.</p>
 <p><strong>Funding.</strong> The institution escrows the monitored token into the settlement contract by constructing a deposit note commitment addressed to Alice's account. The deposit is now Pending on-chain. A deposit proof is then generated that takes Alice's current account as input, adds the deposited amount to its asset state tree, increments the nonce, and outputs a new account commitment with the updated balance. When the bridge batch containing this proof is finalized, the deposit becomes Validated and Alice's balance is cryptographically bound to the funded amount. The institution controls when and how much to fund; Alice never needs to interact with the public chain directly.</p>
@@ -346,58 +373,58 @@ Final correctness happens on-chain through proof verification.
 <p><strong>The pattern.</strong> Every state change follows the same structure: consume an input account (publish its nullifier), optionally consume input notes (publish their nullifiers), and produce a new output account and output notes (publish their commitments). The account's asset state tree is the authoritative record of balance; notes are the transfer mechanism that moves value between accounts across subpool boundaries. The institution controls entry through deposits and policy through the approval gate; the user controls their private keys and generates the proofs.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="protocol-objects">4. Protocol Objects</h2>
-<p>The user lifecycle in Section 3.4 introduced accounts, notes, and nullifiers through a concrete example. This section defines each protocol object precisely: what it commits to, how many field elements it contains, and what role it plays in the settlement flow. The exact hash specifications are in Appendix A.</p>
+<h2 id="protocol-objects">5. Protocol Objects</h2>
+<p>The user lifecycle in Section 4.4 introduced accounts, notes, and nullifiers through a concrete example. This section defines each protocol object precisely: what it commits to, how many field elements it contains, and what role it plays in the settlement flow. The exact hash specifications are in Appendix A.</p>
 
-<h3 id="field-representation">4.1 Field Representation</h3>
+<h3 id="field-representation">5.1 Field Representation</h3>
 <p>The protocol operates over the Goldilocks prime field with <em>p</em> = 2<sup>64</sup> - 2<sup>32</sup> + 1. Commitments are Poseidon hashes in sponge mode without padding. Every commitment is a tuple of four field elements (256 bits total). When these values cross the boundary to the EVM, each field element is encoded as two 32-bit words in little-endian order, producing a 32-byte representation that the contract can hash with Keccak.</p>
 
-<h3 id="account">4.2 Account</h3>
+<h3 id="account">5.2 Account</h3>
 <p>A Doxa account is a private state container permanently bound to one subpool. It holds the user's private identifier, the subpool id (which is immutable and enforced in-circuit on every transaction), a nonce, spend and consume authorization keys, and an asset state tree that tracks per-asset balances across up to 1,024 distinct assets.</p>
 <p>The account commitment binds all of these fields into a single Poseidon hash over 19 field elements: the private identifier (which is never shared), the subpool id (which identifies the policy domain), the root of the asset state tree (which commits all balances without revealing them), the nonce (which prevents replay), and the authorization keys (which control who can spend or consume the account). Accounts without explicit authorization keys use deterministic default placeholders so the commitment structure remains uniform. See Appendix A for the exact specification.</p>
 <p>The resulting commitment is published as part of batch settlement, but the account contents it represents remain entirely private.</p>
 
-<h3 id="account-address">4.3 Account Address</h3>
+<h3 id="account-address">5.3 Account Address</h3>
 <p>To receive notes, a user needs a shareable identifier that counterparties can address value to without learning the user's private state. The account address serves this purpose. It contains a subpool id and a public identifier. The public identifier is derived from the private identifier through a one-way hash with a domain separator, so it can be shared without revealing the underlying secret. The subpool id tells counterparties which policy domain the account belongs to, making inter-subpool transfers possible: a sender can address output notes to a recipient in another subpool because the address specifies the target.</p>
 
-<h3 id="account-nullifier">4.4 Account Nullifier</h3>
+<h3 id="account-nullifier">5.4 Account Nullifier</h3>
 <p>A transaction creates new state (represented by output commitments) and consumes old state (by publishing nullifiers). An account nullifier marks an account state as consumed. It is a Poseidon hash over the account commitment and a nullifier key (itself derived from the private identifier). Because the nullifier depends on the commitment, consuming the same account state twice produces the same nullifier, which the contract rejects. Because the nullifier key depends on the private identifier, only the account owner can produce the correct nullifier. The settlement contract stores all used nullifiers in a global mapping; if a nullifier has already been inserted, the batch reverts.</p>
 
-<h3 id="standard-note">4.5 Standard Note</h3>
+<h3 id="standard-note">5.5 Standard Note</h3>
 <p>Accounts hold balances; notes move value between them. A standard note is a private transfer object. It commits to a random note identifier, an amount, an asset id, a recipient account address, and a sender account address. The Poseidon commitment binds all of these into a single hash over 21 field elements. The recipient can later spend the note by proving ownership and revealing the corresponding note nullifier. The note commitment can be included in a batch root without exposing any of the note's contents.</p>
 
-<h3 id="note-nullifier">4.6 Note Nullifier</h3>
+<h3 id="note-nullifier">5.6 Note Nullifier</h3>
 <p>A note nullifier marks a note as consumed. It is a Poseidon hash over the note commitment, the note's position in the commitment tree, and the owning account's nullifier key. The position binding prevents a single note from being claimed at two different tree positions. The contract stores note nullifiers in the same global mapping as account nullifiers.</p>
 
-<h3 id="deposit-note">4.7 Deposit Note</h3>
+<h3 id="deposit-note">5.7 Deposit Note</h3>
 <p>Standard notes circulate within the shielded system; deposit notes bridge value into it from the public chain. A deposit note represents public assets entering the shielded system. It commits to a note identifier, a recipient account address, an amount, and an asset id (16 field elements total). Unlike standard notes, deposit notes are registered on-chain: the settlement contract stores the commitment alongside the escrowed value and tracks its lifecycle through pending, validated, and withdrawn states.</p>
 
-<h3 id="subpool-configuration">4.8 Subpool Configuration</h3>
+<h3 id="subpool-configuration">5.8 Subpool Configuration</h3>
 <p>The objects above (accounts, notes, nullifiers, deposits) describe private state and its transitions. The subpool configuration describes the institutional policy layer that governs who can participate and under what rules. A subpool is a policy domain. Its configuration is committed in a two-level tree structure.</p>
 <p>At the inner level, each subpool has a small configuration tree (depth 2, four leaves) with an approval key at index 0 and three reserved positions. The approval key is a Schnorr public key over the Goldilocks field. The root of this tree represents the subpool's policy configuration.</p>
 <p>The approval key is the institution's primary enforcement mechanism. Every real private transaction proof includes an in-circuit Schnorr signature verification: the subpool operator signs the transaction hash with the approval private key, and the ZK circuit rejects the proof if the signature is invalid. This means no transaction from a subpool's accounts can be proven without the subpool's explicit cryptographic consent. The approval gate is enforced at the proof level, not at an API level, so it cannot be bypassed by any party.</p>
 <p>At the outer level, a main pool configuration tree (depth 20, supporting over one million subpools) stores one leaf per subpool. Each leaf commits the subpool's configuration root alongside its subpool id. The root of this tree is a global parameter of the settlement contract. Every transaction proof binds to this root, which means the subpool's policy membership is part of the proven statement.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="state-and-commitment-model">5. State and Commitment Model</h2>
+<h2 id="state-and-commitment-model">6. State and Commitment Model</h2>
 <p>With the protocol objects defined, the next question is how the settlement contract stores and advances state. The answer is deliberately minimal: the contract maintains a single append-only tree, a single nullifier mapping, and a handful of lifecycle mappings, then compresses every batch into one tree leaf. This section describes that state model and how it connects to the two-phase settlement flow.</p>
 
-<h3 id="settlement-root-pipeline">5.1 Settlement Root Pipeline</h3>
+<h3 id="settlement-root-pipeline">6.1 Settlement Root Pipeline</h3>
 <p>The on-chain state follows a five-stage pipeline, shown in the top row of Figure 2.</p>
 <p>The pipeline begins with the <strong>batch preimage (1)</strong>, which the coordinator submits in Phase 1 as raw bytes. At this point the contract only stores the Keccak digest; the remaining stages execute during Phase 2 after proof verification succeeds. The contract reads the <strong>batch Poseidon root (2)</strong> from offset zero of the preimage: this is the depth-9 Merkle root over the batch's 512 output commitments. That root is appended as a new leaf to the <strong>Poseidon incremental Merkle tree (3)</strong>, an append-only structure whose leaves are the batch roots of every proven batch in the system's history. The tree update produces an updated <strong>current root (4)</strong>, which represents the latest global state of the settlement system. Finally, this new root is recorded in the <strong>confirmed roots (5)</strong> mapping, a historical index of every root that has resulted from a successful proof verification.</p>
 <p>Every batch must reference a root from this confirmed set in its preimage header, which prevents a proof from being finalized against unknown or fabricated state. There are no optimistic or speculative roots; the tree advances only after proof verification succeeds. The tree can grow to depth 32, supporting billions of batches over the lifetime of the contract.</p>
 
-<h3 id="side-state">5.2 Side State</h3>
+<h3 id="side-state">6.2 Side State</h3>
 <p>Four additional state objects sit alongside the root pipeline (see Figure 2, bottom row). The <strong>nullifiers</strong> mapping tracks every spent nullifier across all proven batches; it is written during Phase 2. The <strong>deposits</strong> mapping tracks deposit lifecycle (None, Pending, Validated, Withdrawn); Phase 1 reads pending status for bridge batches, and Phase 2 marks deposits as validated. The <strong>validated batch roots</strong> mapping records every batch Poseidon root whose proof has been verified; it is written during Phase 2. The <strong>pending and confirmed batch</strong> mappings, keyed by the Keccak digest of the batch preimage, track the two-phase flow: Phase 1 creates the pending entry, Phase 2 transitions it to confirmed.</p>
 
-<h3 id="batch-root-compression">5.3 The Batch Root as Compression Boundary</h3>
+<h3 id="batch-root-compression">6.3 The Batch Root as Compression Boundary</h3>
 <p>The batch root is the compression boundary between private commitments and public settlement state. Inside a private transaction batch, 64 proof slots each contribute one account commitment and seven note commitments, producing 512 output commitments. Inside a bridge transaction batch, 512 proof slots each contribute one account commitment, also producing 512 outputs. In both cases, these 512 commitments are organized into a depth-9 Poseidon Merkle tree whose root becomes the batch Poseidon root.</p>
 <p>The public contract appends only this root. A user or indexer can later prove that a specific commitment belongs to a validated batch by providing a Merkle path of exactly nine siblings.</p>
 
-<h3 id="double-spend-resistance">5.4 Double-Spend Resistance</h3>
+<h3 id="double-spend-resistance">6.4 Double-Spend Resistance</h3>
 <p>Double-spend prevention relies on the global nullifier mapping. When a private transaction batch is finalized, each real slot contributes one account nullifier and seven note nullifiers to the mapping. When a bridge batch is finalized, each real slot contributes one account nullifier. Before inserting any nullifiers, the contract pre-checks the entire batch: if even one nullifier has already been recorded, the transaction reverts atomically and no state is mutated. This all-or-nothing enforcement ensures that a batch either fully applies or leaves the contract state unchanged.</p>
 
-<h3 id="three-roots">5.5 Three Root Types</h3>
+<h3 id="three-roots">6.5 Three Root Types</h3>
 <p>Three distinct roots appear throughout the protocol. The <em>batch root</em> is the Poseidon root over the 512 output commitments inside one batch. The <em>global state root</em> is the root of the on-chain tree whose leaves are batch roots. The <em>main pool configuration root</em> commits the active subpool policy configuration. Every batch preimage begins with a 96-byte header containing all three roots in fixed order, binding the batch to a specific snapshot of global state and policy.</p>
 
 <figure style="margin:24px 0;text-align:center">
@@ -406,21 +433,21 @@ Final correctness happens on-chain through proof verification.
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="deposits-and-bridge-entry">6. Deposits and Bridge Entry</h2>
+<h2 id="deposits-and-bridge-entry">7. Deposits and Bridge Entry</h2>
 <p>The state model shows where batch roots and nullifiers end up on-chain. This section describes how value enters the shielded system: an institution escrows the monitored token into the settlement contract, a deposit note links that escrow to a specific user account, and a bridge batch proof validates the deposit into private state.</p>
 
-<h3 id="entering-the-shielded-system">6.1 Depositing Value</h3>
+<h3 id="entering-the-shielded-system">7.1 Depositing Value</h3>
 <p>To bring value into the shielded system, the institution (or any party with token allowance) constructs a deposit note commitment addressed to a specific user account and submits it to the settlement contract along with the token amount. The contract transfers the monitored token from the caller into escrow, measures the actual received amount by balance delta (to handle fee-on-transfer tokens), stores the deposit record, and emits an event. The deposit is now Pending: the tokens are locked in the contract, the commitment is recorded, and the deposit awaits inclusion in a bridge batch.</p>
 <p>The contract supports delegated deposit variants where a third party funds the escrow, enabling institutional treasury flows where the institution manages on-chain token operations and users never interact with the public chain directly. The deposit note's recipient field cryptographically binds the escrowed value to a specific account within a specific subpool.</p>
 
-<h3 id="deposit-lifecycle">6.2 Deposit Lifecycle</h3>
+<h3 id="deposit-lifecycle">7.2 Deposit Lifecycle</h3>
 <p>A deposit moves through four states (see Figure 3): <em>None</em> (no record), <em>Pending</em> (escrowed on-chain), <em>Validated</em> (proven into private state), and <em>Withdrawn</em> (returned to depositor).</p>
 <p>In transition <strong>①</strong>, the institution calls the deposit function. The contract escrows tokens and records the commitment as Pending.</p>
 <p>In transition <strong>②</strong>, a bridge batch proof is finalized in Phase 2. The contract marks the deposit as Validated. At this point the deposit is part of a validated batch: the corresponding deposit proof has credited the target user's account, and the value now lives in the private set. This transition is one-way and proof-verified.</p>
 <p>In transition <strong>③</strong>, the recorded recipient reclaims tokens while the deposit is still Pending. This is available only before validation. The contract updates the status to Withdrawn before transferring tokens.</p>
 <p>Phase 1 is read-only with respect to deposits: the bridge batch submission checks that referenced deposits are Pending but does not change their status. The status flips to Validated only in Phase 2, after the Groth16 proof verifies. This two-phase design ensures that deposits are consumed only when a valid proof exists for the entire batch.</p>
 
-<h3 id="bridge-batch-structure">6.3 Bridge Batch Structure</h3>
+<h3 id="bridge-batch-structure">7.3 Bridge Batch Structure</h3>
 <p>Bridge transaction batches handle the boundary between public and private state. Each bridge batch has 512 proof slots split evenly: 256 withdrawal slots and 256 deposit slots. Withdrawal proofs expose asset ids, withdrawal amounts, and a withdrawal address alongside the standard account nullifier and output commitment. Deposit proofs expose the deposit note commitment, the destination address, the amount, and the asset id.</p>
 <p>Unused slots in each half are padded independently with dummy proofs. The batch root is computed over all 512 output account commitments in slot order: withdrawals first, deposits second.</p>
 
@@ -430,36 +457,36 @@ Final correctness happens on-chain through proof verification.
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="private-transactions">7. Private Transactions</h2>
+<h2 id="private-transactions">8. Private Transactions</h2>
 <p>Once value is inside the shielded system, users transfer it through private transactions. Each transaction consumes one account state and up to seven notes, produces a new account state and up to seven new notes, and exposes only the minimum public values needed for the coordinator to build a batch. Every real transaction requires the user's spend key signature and the subpool's approval key signature, both verified in-circuit. This section describes the transaction shape, the public input layout, and how output commitments map to batch leaves.</p>
 
-<h3 id="transaction-shape">7.1 Transaction Shape</h3>
+<h3 id="transaction-shape">8.1 Transaction Shape</h3>
 <p>A private transaction proves a state transition from one input account and up to seven input notes to one output account and up to seven output notes. The proof checks spend authorization, note ownership, nullifier derivation for both account and notes, balance conservation across all consumed and created values, and policy membership through the main pool configuration root. The private witness (balances, keys, Merkle paths, note contents) remains entirely off-chain.</p>
 <p>The proof exposes 73 public values: the referenced state root and configuration root (shared across all slots in a batch), a real-or-dummy flag, one account nullifier, one account commitment, seven note nullifiers, and seven note commitments. The first eight values are common batch inputs; the remaining 65 are per-slot unique inputs that populate the batch preimage. See Appendix B for the full layout.</p>
 
-<h3 id="output-commitments">7.2 Output Commitments and Batch Leaves</h3>
+<h3 id="output-commitments">8.2 Output Commitments and Batch Leaves</h3>
 <p>Each private transaction slot contributes eight leaves to the batch subtree: one output account commitment followed by seven output note commitments. With 64 slots, the batch subtree has exactly 512 leaves. The coordinator arranges these in slot order; the prover computes the Poseidon Merkle root over all 512; and the settlement contract records that root.</p>
 
-<h3 id="real-and-dummy">7.3 Real and Dummy Transactions</h3>
+<h3 id="real-and-dummy">8.3 Real and Dummy Transactions</h3>
 <p>A real-or-dummy flag distinguishes actual transactions from padding. Dummy proofs carry compatible roots and placeholder public inputs, allowing every batch to fill all 64 slots regardless of how many real transactions are included. The batch root includes both real and dummy outputs, but the contract inserts nullifiers only for real slots. This ensures that the batch shape is always uniform (critical for aggregation circuits) while dummy slots have no settlement effect.</p>
 
-<h3 id="inter-subpool-transfers">7.4 Inter-Subpool Transfers</h3>
-<p>A private transaction consumes one input account. Cross-subpool value movement happens through output notes: a sender in subpool A creates notes addressed to recipients in subpool B, because account addresses include a subpool id. The target subpool must then discover that notes exist. This can happen through encrypted note delivery, viewing keys, subpool-to-subpool forwarding, or a shared data availability layer. The delivery model affects privacy, auditability, and institutional responsibility boundaries, and is discussed further in Section 11.</p>
+<h3 id="inter-subpool-transfers">8.4 Inter-Subpool Transfers</h3>
+<p>A private transaction consumes one input account. Cross-subpool value movement happens through output notes: a sender in subpool A creates notes addressed to recipients in subpool B, because account addresses include a subpool id. The target subpool must then discover that notes exist. This can happen through encrypted note delivery, viewing keys, subpool-to-subpool forwarding, or a shared data availability layer. The delivery model affects privacy, auditability, and institutional responsibility boundaries, and is discussed further in Section 12.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="ordering-and-batch-construction">8. Ordering and Batch Construction</h2>
+<h2 id="ordering-and-batch-construction">9. Ordering and Batch Construction</h2>
 <p>Individual transaction proofs cannot be submitted to the chain one by one; the verification cost would be prohibitive. Instead, the coordinator collects approved proofs, arranges them into a fixed-size batch, and commits the exact arrangement through a byte-level preimage whose Keccak digest becomes the binding object for the entire settlement flow. This section describes how that preimage is constructed and what it contains.</p>
 
-<h3 id="coordinator-role">8.1 The Coordinator's Role</h3>
+<h3 id="coordinator-role">9.1 The Coordinator's Role</h3>
 <p>The coordinator receives approved proofs, checks that they share compatible roots, chooses a slot ordering, pads the batch with dummy proofs, and constructs the batch preimage. It then submits the preimage to the settlement contract in Phase 1. The coordinator is trusted for availability and ordering, not for validity. It can delay, censor, or reorder eligible proofs, but it cannot cause the contract to accept an invalid state transition without a valid proof for that exact batch.</p>
 
-<h3 id="batch-preimage">8.2 The Batch Preimage</h3>
+<h3 id="batch-preimage">9.2 The Batch Preimage</h3>
 <p>The batch preimage is the exact byte sequence that binds every element of the batch into a single Keccak commitment (see Figure 4).</p>
-<p>For a private transaction batch, the 64 slots are laid out in a grid where real slots carry the actual transaction public inputs and padding slots carry dummy values with the same byte size. Each slot is 520 bytes: an 8-byte real-or-dummy flag, a 32-byte account nullifier, a 32-byte account output commitment, seven 32-byte note nullifiers (224 bytes), and seven 32-byte note commitments (224 bytes). All hash fields follow the Goldilocks encoding described in Section 4.1: each field element is split into two little-endian 32-bit words, producing 8 bytes per element and 32 bytes per four-element hash output.</p>
+<p>For a private transaction batch, the 64 slots are laid out in a grid where real slots carry the actual transaction public inputs and padding slots carry dummy values with the same byte size. Each slot is 520 bytes: an 8-byte real-or-dummy flag, a 32-byte account nullifier, a 32-byte account output commitment, seven 32-byte note nullifiers (224 bytes), and seven 32-byte note commitments (224 bytes). All hash fields follow the Goldilocks encoding described in Section 5.1: each field element is split into two little-endian 32-bit words, producing 8 bytes per element and 32 bytes per four-element hash output.</p>
 <p>The full preimage consists of a 96-byte header (batch Poseidon root, state root, and main pool configuration root, each 32 bytes) followed by the 64-slot block (64 x 520 = 33,280 bytes), totaling 33,376 bytes. Padding keeps the preimage fixed-size regardless of how many real transactions the operator has gathered.</p>
 <p>The Keccak-256 digest of this preimage is the PI commitment. Phase 1 stores this 32-byte digest. Phase 2 re-derives it from the same preimage and splits it into eight 32-bit big-endian words as the Groth16 verifier's public input.</p>
 
-<h3 id="ordering-policy">8.3 Ordering Policy</h3>
+<h3 id="ordering-policy">9.3 Ordering Policy</h3>
 <p>The protocol defines how an order is committed, not how the order is chosen. The coordinator has discretion over slot ordering. Possible policies include first-in-first-out per subpool, round-robin across subpools, signed inclusion receipts, batch deadlines, or public inclusion queues. These are product-level decisions that the protocol can accommodate without changes to the settlement or proof layers.</p>
 
 <figure style="margin:24px 0;text-align:center">
@@ -468,10 +495,10 @@ Final correctness happens on-chain through proof verification.
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="proof-pipeline">9. Proof Pipeline</h2>
+<h2 id="proof-pipeline">10. Proof Pipeline</h2>
 <p>The batch preimage commits the order and content of a batch; the proof pipeline proves that every slot in that batch represents a valid state transition. The pipeline's job is to reduce dozens of individual Plonky2 proofs into a single Groth16 proof that the settlement contract can verify in one on-chain call, while ensuring that the proven statement matches the committed preimage exactly.</p>
 
-<h3 id="pipeline-overview">9.1 Overview</h3>
+<h3 id="pipeline-overview">10.1 Overview</h3>
 <p>The pipeline operates in four layers (see Figure 5), each of which narrows the proof count while preserving the cryptographic binding to the batch preimage.</p>
 <p><strong>Layer 1: Per-transaction leaf.</strong> Each slot receives one Plonky2 proof that attests to the correctness of a single private transaction, deposit, or withdrawal. Padding slots prove the dummy-transaction witness so that every position in the batch has a valid proof regardless of actual transaction volume. A 64-slot private batch therefore produces 64 independent leaf proofs from 64 transaction witnesses.</p>
 <p><strong>Layer 2: Recursive aggregator.</strong> A generic recursive aggregator performs an 8-way merge across 2 levels (8<sup>2</sup> = 64), reducing the 64 leaf proofs into a single aggregated proof. In parallel, a subtree root circuit independently proves that the 512 output commitments hash to the claimed batch Poseidon root. These two computations share no dependencies and can run concurrently, producing one aggregation proof and one subtree root proof.</p>
@@ -479,13 +506,13 @@ Final correctness happens on-chain through proof verification.
 <p><strong>Layer 4: BN128 wrap and Groth16.</strong> The super circuit's Plonky2 proof is re-verified over BN254 and wrapped as a Groth16 proof for on-chain verification through standard EVM precompiles. This final stage transitions the proof from the Goldilocks field to BN254, producing the proof object that the settlement contract receives and verifies.</p>
 <p>Across the four layers, the proof count collapses from 64 independent leaf proofs down to two intermediate proofs (one aggregation, one subtree root), then to one super proof, and finally to a single Groth16 proof. The first three layers operate in Plonky2 over the Goldilocks field; the last layer lifts the result into BN254 for EVM compatibility.</p>
 
-<h3 id="private-tx-aggregation">9.2 Private Transaction Path</h3>
+<h3 id="private-tx-aggregation">10.2 Private Transaction Path</h3>
 <p>For private transaction batches, the 64 per-slot proofs are aggregated through a recursive tree with arity 8 and depth 2 (8<sup>2</sup> = 64 leaves). The subtree root circuit proves the 512-leaf Poseidon Merkle root. The private transaction super circuit then verifies both proofs, cross-checks that each slot's eight output commitments match the corresponding subtree leaves, builds the Keccak preimage, and outputs the digest.</p>
 
-<h3 id="bridge-tx-aggregation">9.3 Bridge Transaction Path</h3>
+<h3 id="bridge-tx-aggregation">10.3 Bridge Transaction Path</h3>
 <p>For bridge transaction batches, each of the 256 withdrawal-deposit pairs is first verified by a pair-leaf circuit that checks one withdrawal proof and one deposit proof together. The 256 pair proofs are then aggregated through a recursive tree with arity 4 and depth 4 (4<sup>4</sup> = 256 leaves). The subtree root circuit proves the 512-leaf Poseidon Merkle root, where leaves 0 through 255 are withdrawal account commitments and leaves 256 through 511 are deposit account commitments. The bridge transaction super circuit verifies both proofs, cross-checks the output commitments, builds the Keccak preimage, and outputs the digest.</p>
 
-<h3 id="groth16-wrapper">9.4 Groth16 Wrapper</h3>
+<h3 id="groth16-wrapper">10.4 Groth16 Wrapper</h3>
 <p>The super circuit produces a Plonky2 proof over the Goldilocks field. This proof is wrapped in two stages: first into a BN128 representation, then into a Groth16 proof over the BN254 curve. The resulting proof consists of eight field elements, two commitments, and two proofs-of-knowledge, which is the standard input format for an EVM-based Groth16 verifier. The contract derives the expected public inputs by splitting the stored Keccak digest into eight big-endian 32-bit words, ensuring that prover and verifier agree on the exact encoding.</p>
 
 <figure style="margin:24px 0;text-align:center">
@@ -494,23 +521,23 @@ Final correctness happens on-chain through proof verification.
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="on-chain-settlement">10. On-Chain Settlement</h2>
+<h2 id="on-chain-settlement">11. On-Chain Settlement</h2>
 <p>The proof pipeline produces a Groth16 proof; this section describes how the settlement contract consumes it. Settlement is split into two on-chain phases separated by an off-chain proving interval, giving the coordinator time to generate the proof without blocking the chain and allowing any party to finalize the batch once the proof is ready.</p>
 
-<h3 id="two-phase-model">10.1 The Two-Phase Model</h3>
+<h3 id="two-phase-model">11.1 The Two-Phase Model</h3>
 <p>A single batch crosses three regimes (see Figure 6): an operator-gated on-chain commit at time T<sub>0</sub>, an off-chain proving interval between T<sub>0</sub> and T<sub>1</sub>, and a permissionless on-chain finalization at T<sub>1</sub>. This separation exists because proof generation takes time. The coordinator commits the batch on-chain while the proving pipeline works. In practice the coordinator usually submits both phases, but the contract enforces the operator gate only on Phase 1.</p>
 
-<h3 id="phase-1-commit">10.2 Phase 1: Submit</h3>
+<h3 id="phase-1-commit">11.2 Phase 1: Submit</h3>
 <p>At T<sub>0</sub>, the coordinator submits the full batch preimage to the settlement contract. The contract validates that the referenced state root appears in the confirmed roots history and that the configuration root matches the current accepted value. For bridge batches, it additionally checks that every real deposit slot references a deposit note that is currently pending.</p>
 <p>If all checks pass, the contract computes the Keccak digest of the preimage and pins it as a pending batch commitment. The writes are minimal: the pending batch mapping is set for that PI commitment. Phase 1 does not verify any proof, does not append a batch root, does not advance the state root, does not insert nullifiers, and does not change deposit status.</p>
 
-<h3 id="proving-interval">10.3 Proving Interval</h3>
+<h3 id="proving-interval">11.3 Proving Interval</h3>
 <p>Between T<sub>0</sub> and T<sub>1</sub>, the proving pipeline runs off-chain. It takes the batch preimage and the per-slot Plonky2 proof artifacts as inputs, runs the private transaction or bridge transaction aggregator, wraps through BN128 and Groth16, and produces a single proof bound to the stored PI commitment. If the coordinator or prover fails during this interval, the batch remains pending on-chain with no state effect.</p>
 
-<h3 id="phase-2-prove">10.4 Phase 2: Prove</h3>
+<h3 id="phase-2-prove">11.4 Phase 2: Prove</h3>
 <p>At T<sub>1</sub>, any party holding the batch preimage and proof submits Phase 2. The contract recomputes the Keccak digest, confirms that a pending batch exists with that commitment, derives the eight public inputs via the Keccak-to-public-inputs conversion, and calls the appropriate Groth16 verifier (one for private transaction batches, one for bridge batches). If verification fails, the call reverts and no state changes.</p>
 
-<h3 id="finalization-effects">10.5 Finalization Effects</h3>
+<h3 id="finalization-effects">11.5 Finalization Effects</h3>
 <p>When the proof verifies, the contract applies the batch effects atomically. It transitions the batch from pending to confirmed. It pre-checks every nullifier in the batch for uniqueness, reverting the entire transaction on any conflict, then inserts all nullifiers from real slots. It records the batch Poseidon root in the validated batch roots mapping. It appends the batch root as a new leaf to the Poseidon incremental Merkle tree, which updates the current state root and records the new root in the confirmed roots history. For bridge batches, it additionally marks real deposit notes as validated. After finalization, the batch's commitments are part of the global state, its nullifiers are spent, and its root can be referenced by future batches.</p>
 
 <figure style="margin:24px 0;text-align:center">
@@ -519,67 +546,67 @@ Final correctness happens on-chain through proof verification.
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="subpools-and-institutional-policy">11. Subpools and Institutional Policy</h2>
+<h2 id="subpools-and-institutional-policy">12. Subpools and Institutional Policy</h2>
 <p>The settlement flow treats subpools as opaque policy boundaries: a proof binds to a configuration root, and the contract checks that root, but neither the contract nor the coordinator needs to know what policy a subpool enforces. This section explains the concrete enforcement mechanism, what an institution operates, what it can see, and what remains unspecified.</p>
 
-<h3 id="approval-gate">11.1 The Approval Gate</h3>
-<p>The subpool's primary enforcement mechanism is the approval signature. As described in Section 4.8, every real private transaction proof includes an in-circuit Schnorr signature verification against the subpool's approval key. In practice, this means the institution reviews the transaction request, decides whether to approve it (based on whatever internal policy it enforces), and if approved, signs the transaction hash with its approval private key. The user's client then includes this signature as part of the witness when generating the ZK proof. If the signature is missing or invalid, the circuit rejects the proof and the transaction cannot enter any batch.</p>
+<h3 id="approval-gate">12.1 The Approval Gate</h3>
+<p>The subpool's primary enforcement mechanism is the approval signature. As described in Section 5.8, every real private transaction proof includes an in-circuit Schnorr signature verification against the subpool's approval key. In practice, this means the institution reviews the transaction request, decides whether to approve it (based on whatever internal policy it enforces), and if approved, signs the transaction hash with its approval private key. The user's client then includes this signature as part of the witness when generating the ZK proof. If the signature is missing or invalid, the circuit rejects the proof and the transaction cannot enter any batch.</p>
 <p>This gives the institution a hard veto over every outgoing transaction from its accounts. The veto is cryptographic: it is enforced inside the proof, not by an API gateway that could be circumvented. No transaction from a subpool's accounts can reach settlement without the subpool's explicit consent.</p>
 
-<h3 id="what-institution-operates">11.2 What an Institution Operates</h3>
+<h3 id="what-institution-operates">12.2 What an Institution Operates</h3>
 <p>An institution running a subpool operates a policy service that sits between its users and the coordinator. At minimum, this service must hold the subpool's approval private key, receive transaction requests from users, evaluate each request against institutional policy (KYC status, transaction limits, sanctions screening, internal compliance rules), sign approved transactions, and forward the signed artifacts to the coordinator. Beyond this minimum, an institution may also run user onboarding, account registration, a note delivery service for incoming transfers, transaction monitoring, and an audit log. The protocol does not mandate the scope of these services; it mandates only that the approval signature is present in the proof.</p>
 
-<h3 id="policy-not-compliance">11.3 Policy Without Protocol-Level Compliance</h3>
+<h3 id="policy-not-compliance">12.3 Policy Without Protocol-Level Compliance</h3>
 <p>Doxa does not perform KYC, KYB, sanctions screening, transaction monitoring, custody, brokerage, exchange, or payment transmission. These are institutional responsibilities. The protocol provides the cryptographic substrate (the approval gate, the configuration tree binding, the on-chain settlement finality) and institutions build their regulated workflows on top of it. This separation means that different subpools can enforce different policies without the protocol needing to understand or adjudicate between them.</p>
 
-<h3 id="what-subpool-sees">11.4 What the Subpool Sees</h3>
+<h3 id="what-subpool-sees">12.4 What the Subpool Sees</h3>
 <p>Because the subpool signs each transaction, it necessarily sees the transaction hash and knows that a transaction occurred. If the institution's approval flow requires the user to submit transaction details (amounts, recipients) alongside the proof request, the subpool also sees that metadata. However, the protocol does not require the user to disclose private witness data to the subpool. In the most privacy-preserving deployment, users generate proofs locally and submit only the proof artifact and a signature request; the subpool sees the public inputs (nullifiers, commitments) but not the underlying account balances or note contents.</p>
 <p>The coordinator sees less: only the proof public inputs and the batch metadata needed for ordering. It does not receive transaction details, approval signatures, or institutional policy decisions. Merging the subpool and coordinator roles is a deployment choice, not a protocol requirement.</p>
 
-<h3 id="auditability">11.5 Auditability</h3>
+<h3 id="auditability">12.5 Auditability</h3>
 <p>The subpool automatically has access to every transaction hash it signed, the public inputs of every approved proof (which include nullifiers and output commitments), and the on-chain settlement events that confirm when batches are finalized. This forms a minimal audit trail: the institution knows which transactions it approved, when they settled, and can verify them against the on-chain state.</p>
 <p>For a richer audit trail, institutions can require users to disclose additional data as a condition of approval: note amounts, recipient addresses, or viewing keys that allow the institution to decrypt note contents after the fact. The protocol supports but does not mandate these disclosure models. On-chain state alone is sufficient to verify global settlement integrity (no double-spends, all batch roots correctly proven), but institution-level audit trails require the off-chain records that subpools choose to retain.</p>
 
-<h3 id="cross-subpool-delivery">11.6 Cross-Subpool Transfers</h3>
+<h3 id="cross-subpool-delivery">12.6 Cross-Subpool Transfers</h3>
 <p>When a user in subpool A sends a note to a user in subpool B, the target subpool must learn that the note exists so that the recipient can consume it. The source subpool can forward the note payload directly to subpool B. The user can deliver the note data to the recipient out-of-band. A shared data availability layer can publish note metadata that target subpools scan.</p>
 <p>If a recipient does not want to accept a note, they can reject it within a private transaction: the circuit consumes the incoming note and automatically creates a mirror output note addressed back to the original sender. This is a per-transaction operation initiated by the account holder, not a subpool-level incoming filter.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="recovery-and-data-availability">12. Recovery and Data Availability</h2>
+<h2 id="recovery-and-data-availability">13. Recovery and Data Availability</h2>
 <p>A system that stores private state off-chain must account for failure. If a coordinator goes down, if a prover cannot complete, or if a user loses their local data, the protocol must define what can be recovered and from where. This section describes the recovery model and the data availability architecture.</p>
 
-<h3 id="state-replay">12.1 State Replay</h3>
+<h3 id="state-replay">13.1 State Replay</h3>
 <p>Confirmed state can be rebuilt entirely from public chain data. The replay process fetches batch submission events and maps each commitment to its submission transaction. It fetches proven batch events and sorts them by leaf index. For each proven batch, it retrieves the original submission calldata, decodes the preimage, extracts the batch root and all nullifiers from real slots, inserts the root into the local tree, and records the nullifiers. After replaying all proven batches in order, the local state matches the on-chain state exactly. No off-chain database is required for settlement integrity.</p>
 
-<h3 id="coordinator-and-prover-failure">12.2 Coordinator and Prover Failure</h3>
+<h3 id="coordinator-and-prover-failure">13.2 Coordinator and Prover Failure</h3>
 <p>If the coordinator fails before Phase 1, approved proofs may need to be resubmitted to another coordinator or rebatched. If the coordinator fails after Phase 1 but before Phase 2, the batch remains pending. Since Phase 2 is permissionless, any party with the batch preimage and proof can finalize it. If no one can produce the proof, the batch remains pending indefinitely.</p>
 <p>Pending deposits referenced by unfinalized bridge batches present a related edge case. Phase 1 checks that referenced deposits are Pending, but Phase 2 does not re-check deposit status before marking them Validated. The deposit withdrawal path and the bridge finalization path are therefore independent after Phase 1: the pending withdrawal check is enforced at submission time, and finalization proceeds based on proof validity alone.</p>
 
-<h3 id="data-availability">12.3 Data Availability</h3>
+<h3 id="data-availability">13.3 Data Availability</h3>
 <p>The settlement contract stores batch roots, and submission calldata is available through chain history. It does not store plaintext notes or private witnesses. Users need a way to discover and decrypt notes addressed to them and to obtain Merkle membership paths for their commitments.</p>
 <p>The data availability model specifies who stores note payloads, how recipients discover notes, how subpools synchronize across institutional boundaries, how users recover after local device loss, and what data auditors can request. Settlement correctness is independent of data availability (the proofs and nullifiers guarantee no double-spending regardless), but user experience and institutional auditability depend on the delivery and storage layer operating correctly.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="security-model">13. Security Model</h2>
+<h2 id="security-model">14. Security Model</h2>
 <p>The protocol's security rests on three pillars: the soundness of the proving system, the binding property of the batch commitment, and the atomicity of the on-chain settlement. This section states the trust assumptions, identifies the trust boundaries between participants, and describes the guarantees that hold even when individual actors are compromised.</p>
 
-<h3 id="proof-soundness">13.1 Proof Soundness</h3>
+<h3 id="proof-soundness">14.1 Proof Soundness</h3>
 <p>Assuming the Groth16 and Plonky2 proving systems are sound and the Poseidon hash function is collision-resistant, the settlement contract accepts a batch only if the final proof verifies against public inputs derived from the Keccak commitment. The contract does not trust the coordinator's claim that a batch is valid. It trusts the verifier.</p>
 
-<h3 id="batch-binding">13.2 Batch Binding</h3>
+<h3 id="batch-binding">14.2 Batch Binding</h3>
 <p>The batch preimage binds every element (the batch root, referenced state root, configuration root, real-or-dummy flags, all nullifiers, all output commitments, and type-specific public values) into a single Keccak digest. Any change in slot order or field value changes the digest. The final proof binds to this digest, so no party can alter the batch contents after the proof is generated without invalidating it.</p>
 
-<h3 id="double-spend-resistance">13.3 Double-Spend Resistance</h3>
+<h3 id="double-spend-resistance">14.3 Double-Spend Resistance</h3>
 <p>Double-spend resistance is enforced by the global nullifier mapping. The contract pre-checks every nullifier in a batch before inserting any of them. If any nullifier has already been used, the entire Phase 2 transaction reverts. Because the batch either fully applies or fully reverts, there is no risk of partial state corruption.</p>
 
-<h3 id="deposit-safety">13.4 Deposit Safety</h3>
+<h3 id="deposit-safety">14.4 Deposit Safety</h3>
 <p>The contract rejects duplicate deposit note commitments at registration time. A pending deposit can be withdrawn only by its recorded recipient. Bridge batches can reference only pending deposits during Phase 1. Deposits become validated only after proof verification in Phase 2. The two-phase structure ensures that no deposit can be consumed by an unproven batch.</p>
 
-<h3 id="trust-boundaries">13.5 Trust Boundaries</h3>
+<h3 id="trust-boundaries">14.5 Trust Boundaries</h3>
 <p>The coordinator is trusted for availability and ordering, not validity. It can exclude or delay transactions but cannot cause invalid state transitions. Users trust their subpool according to the deployment model: a subpool that receives private transaction data has greater visibility into user activity than one where users generate proofs locally and submit only the proof artifacts. The settlement contract must be independently audited. The proving system depends on circuit artifacts and verifier keys; production deployment requires reproducible artifact generation, checksums, and a clear upgrade governance path.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
-<h2 id="references">14. References</h2>
+<h2 id="references">15. References</h2>
 <ol type="1">
 <li>J. Groth. <em>On the Size of Pairing-Based Non-interactive Arguments.</em> EUROCRYPT 2016.</li>
 <li>Polygon Zero Team. <em>Plonky2: Fast Recursive Arguments with PLONK and FRI.</em> 2022.</li>
