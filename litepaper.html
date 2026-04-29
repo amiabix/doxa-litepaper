@@ -553,7 +553,7 @@ Final correctness happens on-chain through proof verification.
 
 <h3 id="coordinator-and-prover-failure">12.2 Coordinator and Prover Failure</h3>
 <p>If the coordinator fails before Phase 1, approved proofs may need to be resubmitted to another coordinator or rebatched. If the coordinator fails after Phase 1 but before Phase 2, the batch remains pending. Since Phase 2 is permissionless, any party with the batch preimage and proof can finalize it. If no one can produce the proof, the batch remains pending indefinitely.</p>
-<p>Pending deposits referenced by unfinalized bridge batches present a related edge case. Phase 1 does not mark deposits as validated, so the pending withdrawal path remains available. If a user withdraws a deposit that was referenced in a pending bridge batch, that batch can no longer be finalized because the deposit precondition will fail on re-validation.</p>
+<p>Pending deposits referenced by unfinalized bridge batches present a related edge case. Phase 1 checks that referenced deposits are Pending, but Phase 2 does not re-check deposit status before marking them Validated. The deposit withdrawal path and the bridge finalization path are therefore independent after Phase 1: the pending withdrawal check is enforced at submission time, and finalization proceeds based on proof validity alone.</p>
 
 <h3 id="data-availability">12.3 Data Availability</h3>
 <p>The settlement contract stores batch roots, and submission calldata is available through chain history. It does not store plaintext notes or private witnesses. Users need a way to discover and decrypt notes addressed to them and to obtain Merkle membership paths for their commitments.</p>
