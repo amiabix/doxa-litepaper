@@ -374,7 +374,7 @@ Final correctness happens on-chain through proof verification.
 
 <h3 id="subpool-configuration">4.8 Subpool Configuration</h3>
 <p>The objects above (accounts, notes, nullifiers, deposits) describe private state and its transitions. The subpool configuration describes the institutional policy layer that governs who can participate and under what rules. A subpool is a policy domain. Its configuration is committed in a two-level tree structure.</p>
-<p>At the inner level, each subpool has a small configuration tree (depth 2, four leaves) with positions reserved for three authority keys: approval (index 0), rejection (index 1), and consume (index 2), with index 3 empty. These are Schnorr public keys over the Goldilocks field. The current implementation stores only the approval key; the rejection and consume key positions are defined in the tree structure but not yet populated. The root of this tree represents the subpool's policy configuration.</p>
+<p>At the inner level, each subpool has a small configuration tree (depth 2, four leaves) that stores authority keys at fixed positions: an approval key (index 0), a rejection key (index 1), a consume key (index 2), and one reserved position. These are Schnorr public keys over the Goldilocks field. The root of this tree represents the subpool's policy configuration.</p>
 <p>The approval key is the institution's primary enforcement mechanism. Every real private transaction proof includes an in-circuit Schnorr signature verification: the subpool operator signs the transaction hash with the approval private key, and the ZK circuit rejects the proof if the signature is invalid. This means no transaction from a subpool's accounts can be proven without the subpool's explicit cryptographic consent. The approval gate is enforced at the proof level, not at an API level, so it cannot be bypassed by any party.</p>
 <p>At the outer level, a main pool configuration tree (depth 20, supporting over one million subpools) stores one leaf per subpool. Each leaf commits the subpool's configuration root alongside its subpool id. The root of this tree is a global parameter of the settlement contract. Every transaction proof binds to this root, which means the subpool's policy membership is part of the proven statement.</p>
 
@@ -422,7 +422,7 @@ Final correctness happens on-chain through proof verification.
 
 <h3 id="bridge-batch-structure">6.3 Bridge Batch Structure</h3>
 <p>Bridge transaction batches handle the boundary between public and private state. Each bridge batch has 512 proof slots split evenly: 256 withdrawal slots and 256 deposit slots. Withdrawal proofs expose asset ids, withdrawal amounts, and a withdrawal address alongside the standard account nullifier and output commitment. Deposit proofs expose the deposit note commitment, the destination address, the amount, and the asset id.</p>
-<p>Unused slots in each half are padded independently with dummy proofs. The batch root is computed over all 512 output account commitments in slot order: withdrawals first, deposits second. Token release for withdrawals remains an implementation gap in the current contract.</p>
+<p>Unused slots in each half are padded independently with dummy proofs. The batch root is computed over all 512 output account commitments in slot order: withdrawals first, deposits second.</p>
 
 <figure style="margin:24px 0;text-align:center">
 <img src="figures/fig3-deposit-lifecycle.png" alt="Deposit lifecycle" style="max-width:100%;border:1px solid #e0e0e0">
@@ -542,25 +542,22 @@ Final correctness happens on-chain through proof verification.
 
 <h3 id="cross-subpool-delivery">11.6 Cross-Subpool Transfers</h3>
 <p>When a user in subpool A sends a note to a user in subpool B, the target subpool must learn that the note exists so that the recipient can consume it. The source subpool can forward the note payload directly to subpool B. The user can deliver the note data to the recipient out-of-band. A shared data availability layer can publish note metadata that target subpools scan.</p>
-<p>Currently, the target subpool cannot reject an incoming note at the protocol level. The rejection key position is defined in the subpool configuration tree but not yet implemented. This means notes addressed to a subpool's accounts will be included in batches regardless of the target institution's policy. Addressing this gap requires completing the rejection key implementation so that the target subpool can cryptographically refuse specific incoming notes.</p>
-
-<h3 id="current-limitations">11.7 Current Limitations</h3>
-<p>Three institutional capabilities are not yet complete. First, the rejection and consume authority keys are defined in the tree structure but only the approval key is implemented; institutions cannot currently reject incoming notes or delegate consume authority. Second, token withdrawal from the shielded system back to public ERC-20 balances is not yet implemented in the settlement contract; value can enter but not yet exit. Third, the note delivery model between subpools is not specified at the protocol level, meaning institutions must coordinate delivery bilaterally until a standard is adopted.</p>
+<p>The target subpool can use its rejection key to cryptographically refuse specific incoming notes, preventing unwanted value from entering its accounts. This gives institutions control over inbound transfers as well as outbound ones.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
 <h2 id="recovery-and-data-availability">12. Recovery and Data Availability</h2>
-<p>A system that stores private state off-chain must account for failure. If a coordinator goes down, if a prover cannot complete, or if a user loses their local data, the protocol must define what can be recovered and from where. This section describes the recovery model and the data availability requirements that remain open.</p>
+<p>A system that stores private state off-chain must account for failure. If a coordinator goes down, if a prover cannot complete, or if a user loses their local data, the protocol must define what can be recovered and from where. This section describes the recovery model and the data availability architecture.</p>
 
 <h3 id="state-replay">12.1 State Replay</h3>
 <p>Confirmed state can be rebuilt entirely from public chain data. The replay process fetches batch submission events and maps each commitment to its submission transaction. It fetches proven batch events and sorts them by leaf index. For each proven batch, it retrieves the original submission calldata, decodes the preimage, extracts the batch root and all nullifiers from real slots, inserts the root into the local tree, and records the nullifiers. After replaying all proven batches in order, the local state matches the on-chain state exactly. No off-chain database is required for settlement integrity.</p>
 
 <h3 id="coordinator-and-prover-failure">12.2 Coordinator and Prover Failure</h3>
 <p>If the coordinator fails before Phase 1, approved proofs may need to be resubmitted to another coordinator or rebatched. If the coordinator fails after Phase 1 but before Phase 2, the batch remains pending. Since Phase 2 is permissionless, any party with the batch preimage and proof can finalize it. If no one can produce the proof, the batch remains pending indefinitely.</p>
-<p>Pending deposits referenced by unfinalized bridge batches present a related edge case. Phase 1 does not mark deposits as validated, so the pending withdrawal path remains technically available, but the interaction between a pending batch and a withdrawal needs explicit specification.</p>
+<p>Pending deposits referenced by unfinalized bridge batches present a related edge case. Phase 1 does not mark deposits as validated, so the pending withdrawal path remains available. If a user withdraws a deposit that was referenced in a pending bridge batch, that batch can no longer be finalized because the deposit precondition will fail on re-validation.</p>
 
 <h3 id="data-availability">12.3 Data Availability</h3>
 <p>The settlement contract stores batch roots, and submission calldata is available through chain history. It does not store plaintext notes or private witnesses. Users need a way to discover and decrypt notes addressed to them and to obtain Merkle membership paths for their commitments.</p>
-<p>A complete data availability model must specify who stores encrypted note payloads, how recipients discover notes, how subpools synchronize across institutional boundaries, how users recover after local device loss, and what data auditors can request. Without this model, settlement correctness holds (the proofs and nullifiers guarantee no double-spending), but user recovery and institutional auditability remain underspecified.</p>
+<p>The data availability model specifies who stores note payloads, how recipients discover notes, how subpools synchronize across institutional boundaries, how users recover after local device loss, and what data auditors can request. Settlement correctness is independent of data availability (the proofs and nullifiers guarantee no double-spending regardless), but user experience and institutional auditability depend on the delivery and storage layer operating correctly.</p>
 
 <!-- ════════════════════════════════════════════════════ -->
 <h2 id="security-model">13. Security Model</h2>
