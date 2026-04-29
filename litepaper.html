@@ -312,8 +312,8 @@ Final correctness happens on-chain through proof verification.
 <p>Value that exits the shielded system through a withdrawal returns to a standard public address as a regular ERC-20 balance. From that point it is fully composable with public DeFi: lending protocols, decentralized exchanges, yield aggregators, and any other on-chain application. Because Doxa settles on the same chain as the token itself, there is no liquidity fragmentation between the private settlement layer and the public ecosystem. Users and institutions can move between private settlement and public DeFi as their needs require.</p>
 
 <figure style="margin:24px 0;text-align:center">
-<img src="figures/fig0-institutional-lifecycle.png" alt="Institutional lifecycle across two subpools" style="max-width:100%;border:1px solid #e0e0e0">
-<figcaption style="font-size:15px;font-style:italic;margin-top:8px">Figure 0. Institutional lifecycle across two subpools. Value moves privately through account state trees and notes; tokens stay in escrow.</figcaption>
+<img src="figures/fig-ecosystem-model.png" alt="Ecosystem model" style="max-width:100%;border:1px solid #e0e0e0">
+<figcaption style="font-size:15px;font-style:italic;margin-top:8px">Ecosystem model. Public mints and DeFi withdrawals are visible on-chain; settlement between subpools is private.</figcaption>
 </figure>
 
 <!-- ════════════════════════════════════════════════════ -->
@@ -374,6 +374,11 @@ Final correctness happens on-chain through proof verification.
 <p><strong>Sending.</strong> To send 100 USDT to Bob, Alice's client builds a private transaction that consumes her current account and produces two outputs: a new account commitment with the remaining balance in her asset state tree, and an output note of 100 USDT addressed to Bob's account address in subpool B. The transaction requires Alice's <em>spend key</em> signature (authorizing the account consumption) and the subpool operator's <em>approval key</em> signature (gating the transaction through institutional policy). Both signatures are verified inside the ZK circuit. If Alice is only consuming incoming notes without spending outward, and her account has consume authorization active, a <em>consume key</em> signature is used instead of the spend key. Once signatures are collected, Alice's client generates the Plonky2 proof locally and submits the proof artifact to the coordinator for batching.</p>
 <p><strong>Receiving.</strong> Bob's subpool discovers the incoming note through the note delivery mechanism. Bob's client then constructs a private transaction that consumes both his current account and the received note. The proof outputs a new account commitment with his asset state tree balance increased by 100 USDT. Bob's subpool operator must also sign with its approval key, so subpool B retains policy control over Bob's activity. Until Bob consumes the note, the value exists as a committed note in the batch subtree; after consumption, it exists as part of his account balance.</p>
 <p><strong>The pattern.</strong> Every state change follows the same structure: consume an input account (publish its nullifier), optionally consume input notes (publish their nullifiers), and produce a new output account and output notes (publish their commitments). The account's asset state tree is the authoritative record of balance; notes are the transfer mechanism that moves value between accounts across subpool boundaries. The institution controls entry through deposits and policy through the approval gate; the user controls their private keys and generates the proofs.</p>
+
+<figure style="margin:24px 0;text-align:center">
+<img src="figures/fig0-institutional-lifecycle.png" alt="Institutional lifecycle across two subpools" style="max-width:100%;border:1px solid #e0e0e0">
+<figcaption style="font-size:15px;font-style:italic;margin-top:8px">Figure 0. Institutional lifecycle across two subpools: onboarding, funding, sending, receiving, and settlement.</figcaption>
+</figure>
 
 <!-- ════════════════════════════════════════════════════ -->
 <h2 id="protocol-objects">5. Protocol Objects</h2>
