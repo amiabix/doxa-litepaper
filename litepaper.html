@@ -311,7 +311,10 @@ Final correctness happens on-chain through proof verification.
 <h3 id="public-defi-access">2.6 Public DeFi Access</h3>
 <p>Value that exits the shielded system through a withdrawal returns to a standard public address as a regular ERC-20 balance. From that point it is fully composable with public DeFi: lending protocols, decentralized exchanges, yield aggregators, and any other on-chain application. Because Doxa settles on the same chain as the token itself, there is no liquidity fragmentation between the private settlement layer and the public ecosystem. Users and institutions can move between private settlement and public DeFi as their needs require.</p>
 
-<h3 id="figure-ecosystem">Figure: Ecosystem Model</h3>
+<figure style="margin:24px 0;text-align:center">
+<img src="figures/fig0-institutional-lifecycle.png" alt="Institutional lifecycle across two subpools" style="max-width:100%;border:1px solid #e0e0e0">
+<figcaption style="font-size:15px;font-style:italic;margin-top:8px">Figure 0. Institutional lifecycle across two subpools. Value moves privately through account state trees and notes; tokens stay in escrow.</figcaption>
+</figure>
 
 <!-- ════════════════════════════════════════════════════ -->
 <h2 id="design-goals">3. Design Goals</h2>
