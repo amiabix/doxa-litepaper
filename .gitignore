@@ -1,0 +1,5 @@
+.DS_Store
+*.zip
+Litepeper-diagrams/
+mermaid-init.html
+*-embed.html

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Doxa · System Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#fff;--ink:#15161D;--ink2:#4A4C59;--ink3:#7E7F8C;
+  --border:#D9DCE3;--node-bg:#F7F8FA;--pill:#EEF0F4;
+  --green:#3D8B6E;--green-bg:rgba(61,139,110,.06);
+  --bronze:#8B7355;--bronze-bg:rgba(139,115,85,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;padding:40px 48px 56px}
+.page{max-width:1400px;margin:0 auto}
+
+.hdr{display:flex;justify-content:space-between;align-items:end;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;letter-spacing:-.01em;margin-bottom:6px}
+.sub{font-size:14px;color:var(--ink2);max-width:58ch;line-height:1.5}
+.meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);text-align:right;line-height:1.8}
+.meta b{color:var(--ink);font-weight:600}
+
+.legend{display:flex;gap:20px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink2);background:var(--node-bg)}
+.legend-item{display:flex;align-items:center;gap:6px}
+.sw{width:22px;height:2px;border-radius:1px}
+.sw-solid{background:var(--ink)}
+.sw-dash{border-top:2px dashed var(--ink);background:transparent;height:0}
+.sw-green{background:var(--green)}
+
+.board{border:1px solid var(--border);border-radius:14px;padding:36px 48px;position:relative}
+.board::before{content:'';position:absolute;inset:0;border-radius:14px;
+  background-image:linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;z-index:0}
+.board>*{position:relative;z-index:1}
+
+.plate{border:1px dashed var(--border);border-radius:12px;padding:22px 20px 18px;position:relative}
+.plate-label{position:absolute;top:-10px;left:14px;background:var(--bg);padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.plate-label b{color:var(--green);font-weight:600;margin-right:4px}
+
+.node{background:var(--node-bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px}
+.node-kind{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:2px}
+.node-name{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:2px}
+.node-stereo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3)}
+.node.offchain{border-color:rgba(61,139,110,.25);background:var(--green-bg)}
+.node.offchain .node-kind{color:var(--green)}
+.node.onchain{border-color:rgba(139,115,85,.3);background:var(--bronze-bg)}
+.node.onchain .node-kind{color:var(--bronze)}
+
+/* Flow connectors — pure CSS, in document flow */
+.flow-down{display:flex;align-items:center;gap:10px;padding:10px 0;padding-left:20px}
+.flow-down .stem{width:2px;height:28px;background:var(--ink)}
+.flow-down .stem.dashed{background:repeating-linear-gradient(to bottom,var(--ink) 0,var(--ink) 4px,transparent 4px,transparent 8px)}
+.flow-down .stem.green{background:var(--green)}
+.flow-down .head{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ink)}
+.flow-down .head.green{border-top-color:var(--green)}
+.flow-down .flow-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3)}
+.flow-down .flow-text.green{color:var(--green)}
+
+/* Two-column flow between plates */
+.flow-pair{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:0 20px}
+
+/* Horizontal flow (between seq and prover) */
+.h-flow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.h-flow .h-line{flex:1;height:0;border-top:1.5px dashed var(--ink)}
+.h-flow .h-line.green{border-top-color:var(--green)}
+.h-flow .h-arrow{font-size:12px;color:var(--ink);line-height:1}
+.h-flow .h-arrow.green{color:var(--green)}
+.h-flow .h-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3);white-space:nowrap}
+.h-flow .h-text.green{color:var(--green)}
+
+/* Off-chain layout */
+.offchain-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:18px;align-items:start}
+.prover-col{display:flex;flex-direction:column;gap:6px}
+
+/* Contract internals */
+.contract-box{padding:16px 20px}
+.contract-box .node-name{font-size:20px;margin-bottom:12px}
+.contract-inner{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.phase-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.sub-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.sub-grid.three{grid-template-columns:repeat(3,1fr)}
+.sub-box{background:var(--pill);border:1px solid var(--border);border-radius:7px;padding:7px 8px;text-align:center}
+.sub-box .sl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.pills{display:flex;gap:3px;justify-content:center;margin-top:3px}
+.pill{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:600;background:#E8E6E0;border:1px solid #D4D0C8;border-radius:3px;padding:1px 4px}
+.wide{grid-column:1/-1}
+
+.footer{display:flex;justify-content:space-between;margin-top:20px;padding-top:12px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hdr">
+  <div>
+    <p class="eyebrow">Figure 1</p>
+    <h1>System Architecture</h1>
+    <p class="sub">Two-phase settlement: register batches optimistically on-chain, then confirm with a Groth16 proof once proving completes.</p>
+  </div>
+  <div class="meta">
+    <div>phases <b>4</b></div>
+    <div>actors <b>4</b></div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><span class="sw sw-solid"></span>on-chain call</div>
+  <div class="legend-item"><span class="sw sw-dash"></span>off-chain request</div>
+  <div class="legend-item"><span class="sw sw-green"></span>proof / finality</div>
+</div>
+
+<div class="board">
+
+  <!-- 01 INGRESS -->
+  <div class="plate">
+    <div class="plate-label"><b>01</b> Ingress</div>
+    <div class="node" style="max-width:340px;margin:0 auto">
+      <div class="node-kind">client</div>
+      <div class="node-name">User</div>
+      <div class="node-stereo">deposit · withdraw · private tx</div>
+    </div>
+  </div>
+
+  <!-- Flow: User → off-chain / on-chain -->
+  <div class="flow-pair">
+    <div class="flow-down">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="stem dashed"></div>
+        <div class="head"></div>
+      </div>
+      <div>
+        <div class="flow-text" style="font-weight:600;color:var(--ink2)">User → Sequencer</div>
+        <div class="flow-text">private tx (HTTP)</div>
+      </div>
+    </div>
+    <div class="flow-down">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="stem"></div>
+        <div class="head"></div>
+      </div>
+      <div>
+        <div class="flow-text" style="font-weight:600;color:var(--ink2)">User → Contract</div>
+        <div class="flow-text">deposit / withdraw (on-chain)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 + 03 REGISTRATION + PROVING -->
+  <div class="plate">
+    <div class="plate-label"><b>02</b> Registration + <b>03</b> Proving</div>
+    <div class="offchain-grid">
+      <div class="node offchain">
+        <div class="node-kind">off-chain orchestrator</div>
+        <div class="node-name">Sequencer</div>
+        <div class="node-stereo">validate · batch · orchestrate</div>
+      </div>
+      <div class="prover-col">
+        <div class="h-flow">
+          <span class="h-text">prove request</span>
+          <div class="h-line"></div>
+          <span class="h-arrow">&#9654;</span>
+        </div>
+        <div class="node offchain">
+          <div class="node-kind">off-chain prover</div>
+          <div class="node-name">Prover</div>
+          <div class="node-stereo">5 proofs → SuperAgg → Groth16</div>
+        </div>
+        <div class="h-flow">
+          <span class="h-arrow green">&#9664;</span>
+          <div class="h-line green"></div>
+          <span class="h-text green">Groth16 proof</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow: Sequencer → Contract (Phase 1 + Phase 2) -->
+  <div class="flow-pair">
+    <div class="flow-down">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="stem"></div>
+        <div class="head"></div>
+      </div>
+      <div>
+        <div class="flow-text" style="font-weight:600;color:var(--ink2)">Sequencer → Contract</div>
+        <div class="flow-text">registerTransactionBatchUpdate()</div>
+        <div class="flow-text" style="font-size:9px">Phase 1: optimistic roots</div>
+      </div>
+    </div>
+    <div class="flow-down">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="stem green"></div>
+        <div class="head green"></div>
+      </div>
+      <div>
+        <div class="flow-text green" style="font-weight:600">Sequencer → Contract</div>
+        <div class="flow-text green">confirmBatch(batchId, proof)</div>
+        <div class="flow-text green" style="font-size:9px">Phase 2: verified finality</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 ON-CHAIN SETTLEMENT -->
+  <div class="plate">
+    <div class="plate-label"><b>04</b> On-chain Settlement</div>
+    <div class="node onchain contract-box">
+      <div class="node-kind">on-chain</div>
+      <div class="node-name">Bridge Contract</div>
+      <div class="contract-inner">
+        <div>
+          <div class="phase-label">Phase 1: Registration</div>
+          <div class="sub-grid three">
+            <div class="sub-box"><div class="sl">ERC-20 Escrow</div></div>
+            <div class="sub-box"><div class="sl">Optimistic Roots</div><div class="pills"><span class="pill">NC</span><span class="pill">NN</span><span class="pill">AC</span><span class="pill">AN</span></div></div>
+            <div class="sub-box"><div class="sl">PI Commitment</div></div>
+          </div>
+          <div class="sub-grid" style="margin-top:8px">
+            <div class="sub-box wide"><div class="sl">Ring Buffer</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="phase-label">Phase 2: Confirmation</div>
+          <div class="sub-grid">
+            <div class="sub-box"><div class="sl">Groth16 Verifier</div></div>
+            <div class="sub-box"><div class="sl">Confirmed Roots</div><div class="pills"><span class="pill">NC</span><span class="pill">NN</span><span class="pill">AC</span><span class="pill">AN</span></div></div>
+          </div>
+          <div class="sub-grid" style="margin-top:8px">
+            <div class="sub-box wide"><div class="sl">Slot Freed</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>DOXA PROTOCOL</span>
+  <span>FIGURE 1 — SYSTEM ARCHITECTURE</span>
+</div>
+
+</div>
+</body>
+</html>

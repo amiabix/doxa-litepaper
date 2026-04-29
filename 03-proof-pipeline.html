@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Doxa · Proof Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#fff;--ink:#15161D;--ink2:#4A4C59;--ink3:#7E7F8C;
+  --border:#D9DCE3;--node-bg:#F7F8FA;--pill:#EEF0F4;
+  --green:#3D8B6E;--green-bg:rgba(61,139,110,.06);
+  --bronze:#8B7355;--bronze-bg:rgba(139,115,85,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;padding:40px 48px 56px}
+.page{max-width:1400px;margin:0 auto}
+
+.hdr{display:flex;justify-content:space-between;align-items:end;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;letter-spacing:-.01em;margin-bottom:6px}
+.sub{font-size:14px;color:var(--ink2);max-width:58ch;line-height:1.5}
+.meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);text-align:right;line-height:1.8}
+.meta b{color:var(--ink);font-weight:600}
+
+.board{border:1px solid var(--border);border-radius:14px;padding:36px 48px;position:relative}
+.board::before{content:'';position:absolute;inset:0;border-radius:14px;
+  background-image:linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;z-index:0}
+.board>*{position:relative;z-index:1}
+
+.plate{border:1px dashed var(--border);border-radius:12px;padding:22px 20px 18px;position:relative}
+.plate-label{position:absolute;top:-10px;left:14px;background:var(--bg);padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.plate-label b{color:var(--green);font-weight:600;margin-right:4px}
+
+.node{background:var(--node-bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px}
+.node-kind{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:2px}
+.node-name{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:2px}
+.node-stereo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3)}
+.node.offchain{border-color:rgba(61,139,110,.25);background:var(--green-bg)}
+.node.offchain .node-kind{color:var(--green)}
+.node.onchain{border-color:rgba(139,115,85,.3);background:var(--bronze-bg)}
+.node.onchain .node-kind{color:var(--bronze)}
+
+/* Flow connectors */
+.flow-down{display:flex;align-items:center;gap:10px;padding:10px 0;justify-content:center}
+.flow-down .stem{width:2px;height:28px;background:var(--ink)}
+.flow-down .stem.green{background:var(--green)}
+.flow-down .head{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ink)}
+.flow-down .head.green{border-top-color:var(--green)}
+.flow-down .flow-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3)}
+.flow-down .flow-text.green{color:var(--green)}
+
+/* Top row: 5 proofs */
+.proof-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+
+/* Badge */
+.badge{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--green);background:var(--green-bg);border:1px solid rgba(61,139,110,.25);border-radius:5px;padding:2px 8px;margin-top:6px}
+
+.footer{display:flex;justify-content:space-between;margin-top:20px;padding-top:12px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hdr">
+  <div>
+    <p class="eyebrow">Figure 4</p>
+    <h1>Proof Pipeline</h1>
+    <p class="sub">Five independent proofs converge through recursive aggregation into a single Groth16 proof verified on-chain.</p>
+  </div>
+  <div class="meta">
+    <div>input proofs <b>5</b></div>
+    <div>output <b>1 Groth16</b></div>
+  </div>
+</header>
+
+<div class="board">
+
+  <!-- 01: Top row — 5 independent proofs -->
+  <div class="plate">
+    <div class="plate-label"><b>01</b> Independent Proofs</div>
+    <div class="proof-row">
+      <div class="node">
+        <div class="node-kind">tree proof</div>
+        <div class="node-name">NC</div>
+        <div class="node-stereo">append</div>
+      </div>
+      <div class="node">
+        <div class="node-kind">tree proof</div>
+        <div class="node-name">NN</div>
+        <div class="node-stereo">sorted insert</div>
+      </div>
+      <div class="node">
+        <div class="node-kind">tree proof</div>
+        <div class="node-name">AC</div>
+        <div class="node-stereo">append</div>
+      </div>
+      <div class="node">
+        <div class="node-kind">tree proof</div>
+        <div class="node-name">AN</div>
+        <div class="node-stereo">sorted insert</div>
+      </div>
+      <div class="node offchain">
+        <div class="node-kind">recursive agg</div>
+        <div class="node-name">TX Agg</div>
+        <div class="node-stereo">128 &rarr; 1</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow: 5 proofs converge -->
+  <div class="flow-down">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="stem"></div>
+      <div class="head"></div>
+    </div>
+    <div class="flow-text">5 proofs converge</div>
+  </div>
+
+  <!-- 02: SuperAggregator -->
+  <div class="node offchain" style="max-width:520px;margin:0 auto;text-align:center">
+    <div class="node-kind">recursive circuit</div>
+    <div class="node-name">SuperAggregator</div>
+    <div class="node-stereo">verifies 5 proofs &middot; Keccak PI commitment</div>
+  </div>
+
+  <!-- Flow down -->
+  <div class="flow-down">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="stem"></div>
+      <div class="head"></div>
+    </div>
+    <div class="flow-text">field wrapper</div>
+  </div>
+
+  <!-- 03: BN128 Wrapper -->
+  <div class="node" style="max-width:520px;margin:0 auto;text-align:center">
+    <div class="node-kind">BN254</div>
+    <div class="node-name">BN128 Wrapper</div>
+    <div class="node-stereo">Goldilocks &rarr; EVM-compatible</div>
+  </div>
+
+  <!-- Flow down -->
+  <div class="flow-down">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="stem green"></div>
+      <div class="head green"></div>
+    </div>
+    <div class="flow-text green">final proof</div>
+  </div>
+
+  <!-- 04: Groth16 -->
+  <div class="node offchain" style="max-width:520px;margin:0 auto;text-align:center">
+    <div class="node-kind">final artifact</div>
+    <div class="node-name">Groth16</div>
+    <div class="node-stereo">1 proof &middot; 8 uint256 public inputs</div>
+    <div class="badge">on-chain ready</div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>DOXA PROTOCOL</span>
+  <span>FIGURE 4 — PROOF PIPELINE</span>
+</div>
+
+</div>
+</body>
+</html>

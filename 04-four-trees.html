@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Doxa · Four-Tree State Model</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#fff;--ink:#15161D;--ink2:#4A4C59;--ink3:#7E7F8C;
+  --border:#D9DCE3;--node-bg:#F7F8FA;--pill:#EEF0F4;
+  --green:#3D8B6E;--green-bg:rgba(61,139,110,.06);
+  --bronze:#8B7355;--bronze-bg:rgba(139,115,85,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;padding:40px 48px 56px}
+.page{max-width:1400px;margin:0 auto}
+
+.hdr{display:flex;justify-content:space-between;align-items:end;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;letter-spacing:-.01em;margin-bottom:6px}
+.sub{font-size:14px;color:var(--ink2);max-width:58ch;line-height:1.5}
+.meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);text-align:right;line-height:1.8}
+.meta b{color:var(--ink);font-weight:600}
+
+.board{border:1px solid var(--border);border-radius:14px;padding:36px 48px;position:relative}
+.board::before{content:'';position:absolute;inset:0;border-radius:14px;
+  background-image:linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;z-index:0}
+.board>*{position:relative;z-index:1}
+
+.node{background:var(--node-bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px}
+.node-kind{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:2px}
+.node-name{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:2px}
+.node-stereo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3)}
+.node.offchain{border-color:rgba(61,139,110,.25);background:var(--green-bg)}
+.node.offchain .node-kind{color:var(--green)}
+.node.onchain{border-color:rgba(139,115,85,.3);background:var(--bronze-bg)}
+.node.onchain .node-kind{color:var(--bronze)}
+
+/* Matrix layout */
+.matrix{display:grid;grid-template-columns:100px 1fr 1fr;gap:14px;align-items:stretch}
+.col-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3);text-align:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.row-label{display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3)}
+
+.invariant{margin-top:18px;padding:10px 16px;border:1px dashed var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink2);text-align:center;background:var(--node-bg)}
+
+.footer{display:flex;justify-content:space-between;margin-top:20px;padding-top:12px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hdr">
+  <div>
+    <p class="eyebrow">Figure 2</p>
+    <h1>Four-Tree State Model</h1>
+    <p class="sub">Creation vs. consumption across notes and accounts. All four trees are depth-32 Poseidon Merkle trees over the Goldilocks field.</p>
+  </div>
+  <div class="meta">
+    <div>trees <b>4</b></div>
+    <div>depth <b>32</b></div>
+  </div>
+</header>
+
+<div class="board">
+
+  <!-- Column headers -->
+  <div class="matrix">
+    <div></div>
+    <div class="col-label">Notes</div>
+    <div class="col-label">Accounts</div>
+
+    <!-- Row 1: Creation -->
+    <div class="row-label">Creation</div>
+    <div class="node offchain">
+      <div class="node-kind">NC</div>
+      <div class="node-name">Notes Commitment</div>
+      <div class="node-stereo">append-only &middot; 1,024/batch</div>
+    </div>
+    <div class="node offchain">
+      <div class="node-kind">AC</div>
+      <div class="node-name">Accounts Commitment</div>
+      <div class="node-stereo">append-only &middot; 128/batch</div>
+    </div>
+
+    <!-- Row 2: Consumption -->
+    <div class="row-label">Consumption</div>
+    <div class="node onchain">
+      <div class="node-kind">NN</div>
+      <div class="node-name">Notes Nullifier</div>
+      <div class="node-stereo">indexed sorted insertion &middot; 1,024/batch</div>
+    </div>
+    <div class="node onchain">
+      <div class="node-kind">AN</div>
+      <div class="node-name">Accounts Nullifier</div>
+      <div class="node-stereo">indexed sorted insertion &middot; 128/batch</div>
+    </div>
+  </div>
+
+  <!-- Invariant bar -->
+  <div class="invariant">noteBatchSize = accountBatchSize &times; 8</div>
+
+</div>
+
+<div class="footer">
+  <span>DOXA PROTOCOL</span>
+  <span>FIGURE 2 — FOUR-TREE STATE MODEL</span>
+</div>
+
+</div>
+</body>
+</html>

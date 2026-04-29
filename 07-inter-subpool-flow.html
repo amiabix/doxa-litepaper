@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Doxa · Inter-Subpool Transfer</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#fff;--ink:#15161D;--ink2:#4A4C59;--ink3:#7E7F8C;
+  --border:#D9DCE3;--node-bg:#F7F8FA;--pill:#EEF0F4;
+  --green:#3D8B6E;--green-bg:rgba(61,139,110,.06);
+  --bronze:#8B7355;--bronze-bg:rgba(139,115,85,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;padding:40px 48px 56px}
+.page{max-width:1400px;margin:0 auto}
+
+.hdr{display:flex;justify-content:space-between;align-items:end;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+h1{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;letter-spacing:-.01em;margin-bottom:6px}
+.sub{font-size:14px;color:var(--ink2);max-width:58ch;line-height:1.5}
+.meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);text-align:right;line-height:1.8}
+.meta b{color:var(--ink);font-weight:600}
+
+.board{border:1px solid var(--border);border-radius:14px;padding:36px 48px;position:relative}
+.board::before{content:'';position:absolute;inset:0;border-radius:14px;
+  background-image:linear-gradient(rgba(0,0,0,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.025) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;z-index:0}
+.board>*{position:relative;z-index:1}
+
+.plate{border:1px dashed var(--border);border-radius:12px;padding:22px 20px 18px;position:relative;margin-bottom:20px}
+.plate:last-of-type{margin-bottom:0}
+.plate-label{position:absolute;top:-10px;left:14px;background:var(--bg);padding:0 8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.plate-label b{color:var(--green);font-weight:600;margin-right:4px}
+
+.node{background:var(--node-bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px}
+.node-kind{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:2px}
+.node-name{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;color:var(--ink);margin-bottom:2px}
+.node-stereo{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3);line-height:1.5}
+.node.offchain{border-color:rgba(61,139,110,.25);background:var(--green-bg)}
+.node.offchain .node-kind{color:var(--green)}
+.node.onchain{border-color:rgba(139,115,85,.3);background:var(--bronze-bg)}
+.node.onchain .node-kind{color:var(--bronze)}
+
+.flow-down{display:flex;align-items:center;gap:10px;padding:8px 0;justify-content:center}
+.flow-down .stem{width:2px;height:24px;background:var(--ink)}
+.flow-down .head{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--ink)}
+.flow-down .flow-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3)}
+
+/* Transfer grid: sender | circuit | recipient */
+.transfer-grid{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:16px;align-items:start}
+
+/* Horizontal flow */
+.h-flow{display:flex;align-items:center;gap:6px;padding:4px 0}
+.h-flow .h-line{flex:1;height:0;border-top:1.5px dashed var(--ink)}
+.h-flow .h-arrow{font-size:12px;color:var(--ink);line-height:1}
+.h-flow .h-text{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink3);white-space:nowrap}
+
+/* Config tree visualization */
+.tree-viz{display:flex;flex-direction:column;gap:6px}
+.tree-row{display:flex;align-items:center;gap:8px;padding-left:0}
+.tree-row.indent-1{padding-left:24px}
+.tree-row.indent-2{padding-left:48px}
+.tree-connector{color:var(--ink3);font-family:'JetBrains Mono',monospace;font-size:12px}
+.tree-node{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink2);background:var(--pill);border:1px solid var(--border);border-radius:5px;padding:3px 8px}
+.tree-node.root{background:var(--green-bg);border-color:rgba(61,139,110,.25);color:var(--green)}
+.tree-detail{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)}
+
+/* Verification checklist */
+.check-list{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.check-item{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.check-item::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+
+.pills{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.pill{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:600;background:var(--pill);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--ink2)}
+
+.annotation{margin-top:16px;padding:10px 16px;border:1px dashed var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink3);text-align:center;background:var(--node-bg)}
+
+.footer{display:flex;justify-content:space-between;margin-top:20px;padding-top:12px;border-top:1px solid var(--border);font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink3);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hdr">
+  <div>
+    <p class="eyebrow">Figure 5b</p>
+    <h1>Inter-Subpool Transfer</h1>
+    <p class="sub">How value moves between institutional subpools: the circuit verifies both subpool configurations and authority keys in a single proof.</p>
+  </div>
+  <div class="meta">
+    <div>config depth <b>20</b></div>
+    <div>keys per subpool <b>3</b></div>
+  </div>
+</header>
+
+<div class="board">
+
+  <!-- Config tree hierarchy -->
+  <div class="plate">
+    <div class="plate-label"><b>01</b> Config Tree Hierarchy</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div class="tree-viz">
+        <div class="tree-row">
+          <span class="tree-node root">MainPoolConfigTree</span>
+          <span class="tree-detail">depth 20 · ~1M subpools</span>
+        </div>
+        <div class="tree-row indent-1">
+          <span class="tree-connector">└</span>
+          <span class="tree-node">leaf: H(subpool_root || subpool_id)</span>
+        </div>
+        <div class="tree-row indent-2">
+          <span class="tree-connector">└</span>
+          <span class="tree-node">SubpoolConfigTree</span>
+          <span class="tree-detail">depth 2 · 4 leaves</span>
+        </div>
+        <div class="tree-row indent-2" style="padding-left:72px">
+          <div class="pills">
+            <span class="pill">approval_key</span>
+            <span class="pill">rejection_key</span>
+            <span class="pill">consume_key</span>
+            <span class="pill">empty</span>
+          </div>
+        </div>
+      </div>
+      <div class="node" style="align-self:center">
+        <div class="node-kind">lookup</div>
+        <div class="node-name">In-Circuit Verification</div>
+        <div class="node-stereo">proof provides Merkle path from<br>MainPoolConfigTree root to claimed<br>subpool config for both subpool_id_in<br>and subpool_id_out</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow down -->
+  <div class="flow-down">
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="stem"></div>
+      <div class="head"></div>
+    </div>
+    <span class="flow-text">config verified, now execute transfer</span>
+  </div>
+
+  <!-- Inter-subpool transfer flow -->
+  <div class="plate">
+    <div class="plate-label"><b>02</b> Transfer Flow</div>
+    <div class="transfer-grid">
+      <!-- Sender -->
+      <div class="node offchain">
+        <div class="node-kind">subpool A · sender</div>
+        <div class="node-name">Sender Account</div>
+        <div class="node-stereo">subpool_id_in = A</div>
+        <div class="pills" style="margin-top:6px">
+          <span class="pill">account nullified</span>
+          <span class="pill">notes consumed</span>
+        </div>
+      </div>
+
+      <!-- Circuit checks (center) -->
+      <div class="node onchain" style="text-align:center">
+        <div class="node-kind">in-circuit</div>
+        <div class="node-name">ZK Proof Verifies</div>
+        <div class="check-list">
+          <div class="check-item">A's consume_key authorizes spend</div>
+          <div class="check-item">B's approval_key authorizes receive</div>
+          <div class="check-item">balance conservation</div>
+          <div class="check-item">nullifier derivation correct</div>
+          <div class="check-item">commitment derivation correct</div>
+          <div class="check-item">Schnorr spend signature valid</div>
+        </div>
+      </div>
+
+      <!-- Recipient -->
+      <div class="node offchain">
+        <div class="node-kind">subpool B · recipient</div>
+        <div class="node-name">Recipient Account</div>
+        <div class="node-stereo">subpool_id_out = B</div>
+        <div class="pills" style="margin-top:6px">
+          <span class="pill">new account committed</span>
+          <span class="pill">new notes created</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Horizontal flow arrows -->
+    <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:16px;margin-top:12px">
+      <div class="h-flow">
+        <span class="h-text">input</span>
+        <div class="h-line"></div>
+        <span class="h-arrow">&#9654;</span>
+      </div>
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)">
+        all verified in one Plonky2 proof
+      </div>
+      <div class="h-flow">
+        <span class="h-arrow">&#9664;</span>
+        <div class="h-line"></div>
+        <span class="h-text">output</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annotation -->
+  <div class="annotation">
+    Intra-subpool transfers use the same flow with subpool_id_in = subpool_id_out.
+    Observers cannot distinguish intra from inter-subpool transactions on-chain.
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>DOXA PROTOCOL</span>
+  <span>FIGURE 5b — INTER-SUBPOOL TRANSFER</span>
+</div>
+
+</div>
+</body>
+</html>

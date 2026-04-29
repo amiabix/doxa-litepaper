@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DOXA — Core Data Structures</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#f4f2ee;display:flex;align-items:center;justify-content:center;padding:32px;font-family:"IBM Plex Sans",sans-serif}
+.page{width:1440px;max-width:100%;background:#fbfaf7;border:1px solid #d8d5ce;box-shadow:0 24px 80px rgba(20,20,20,.12)}
+svg{display:block;width:100%;height:auto}.fig{font:600 12px "JetBrains Mono";letter-spacing:.32em;fill:#8b877f}.title{font:700 38px "JetBrains Mono";letter-spacing:.02em;fill:#111}.sub{font:500 15px "IBM Plex Sans";fill:#6b675f}.label{font:600 11px "JetBrains Mono";letter-spacing:.22em;fill:#8b877f}.h{font:700 22px "JetBrains Mono";fill:#111}.small{font:500 14px "IBM Plex Sans";fill:#4f4a43}.tiny{font:500 11px "JetBrains Mono";fill:#6d6961}.card{fill:#f8f7f4;stroke:#beb9ae;stroke-width:1.6}.greenCard{fill:#e8f3ee;stroke:#397064;stroke-width:1.7}.row{fill:#fff;stroke:#cbc5ba;stroke-width:1.1}.formula{fill:#efede8;stroke:#aaa39a;stroke-width:1.2}.green{fill:#2f6b60}
+</style>
+</head>
+<body><div class="page">
+<svg viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+<text x="72" y="70" class="fig">FIGURE 5</text>
+<text x="72" y="118" class="title">Core Data Structures</text>
+<text x="72" y="150" class="sub">Client-side cryptographic objects used by notes, accounts, pool config, and batch slots</text>
+<line x1="72" y1="174" x2="360" y2="174" stroke="#d5d0c7" stroke-width="2"/>
+
+<!-- Standard Note -->
+<g transform="translate(72 220)">
+  <rect width="390" height="430" rx="14" class="greenCard"/>
+  <text x="195" y="38" text-anchor="middle" class="label" fill="#397064">STRUCT</text>
+  <text x="195" y="74" text-anchor="middle" class="h">STANDARD NOTE</text>
+  <rect x="30" y="112" width="330" height="174" rx="10" class="card"/>
+  <text x="52" y="146" class="tiny">identifier</text><text x="230" y="146" class="small">[F; 2]</text>
+  <text x="52" y="176" class="tiny">asset_id</text><text x="230" y="176" class="small">F</text>
+  <text x="52" y="206" class="tiny">amount</text><text x="230" y="206" class="small">U256</text>
+  <text x="52" y="236" class="tiny">recipient</text><text x="230" y="236" class="small">AccountAddress</text>
+  <text x="52" y="266" class="tiny">sender</text><text x="230" y="266" class="small">AccountAddress</text>
+  <text x="30" y="322" class="label" fill="#397064">DERIVATIONS</text>
+  <rect x="30" y="342" width="330" height="34" rx="7" class="formula"/><text x="48" y="364" class="tiny">Commitment</text><text x="148" y="364" class="small">Poseidon(21 field elements)</text>
+  <rect x="30" y="388" width="330" height="34" rx="7" class="formula"/><text x="48" y="410" class="tiny">Nullifier</text><text x="148" y="410" class="small">H(commitment || position || nk)</text>
+</g>
+
+<!-- Account -->
+<g transform="translate(524 220)">
+  <rect width="440" height="430" rx="14" class="greenCard"/>
+  <text x="220" y="38" text-anchor="middle" class="label" fill="#397064">STRUCT</text>
+  <text x="220" y="74" text-anchor="middle" class="h">STANDARD ACCOUNT</text>
+  <rect x="30" y="112" width="380" height="206" rx="10" class="card"/>
+  <text x="52" y="144" class="tiny">private_id</text><text x="230" y="144" class="small">[F; 2]</text>
+  <text x="52" y="171" class="tiny">subpool_id</text><text x="230" y="171" class="small">F</text>
+  <text x="52" y="198" class="tiny">balance</text><text x="230" y="198" class="small">U256 / via AccountStateTree</text>
+  <text x="52" y="225" class="tiny">nonce</text><text x="230" y="225" class="small">F</text>
+  <text x="52" y="252" class="tiny">state_tree</text><text x="230" y="252" class="small">AccountStateTree root</text>
+  <text x="52" y="279" class="tiny">auth</text><text x="230" y="279" class="small">spend + consume keys</text>
+  <text x="30" y="350" class="label" fill="#397064">DERIVATIONS</text>
+  <rect x="30" y="370" width="380" height="34" rx="7" class="formula"/><text x="48" y="392" class="tiny">Commitment</text><text x="148" y="392" class="small">Poseidon(... || state_tree.root || ...)</text>
+  <rect x="30" y="416" width="380" height="34" rx="7" class="formula"/><text x="48" y="438" class="tiny">Nullifier</text><text x="148" y="438" class="small">fresh: H(commitment || nk)</text>
+  <text x="148" y="464" class="small">existing: H(commitment || nk || position)</text>
+</g>
+
+<!-- Config -->
+<g transform="translate(1026 220)">
+  <rect width="342" height="430" rx="14" class="card"/>
+  <text x="171" y="38" text-anchor="middle" class="label">CONFIG</text>
+  <text x="171" y="74" text-anchor="middle" class="h">SUBPOOL CONFIG</text>
+  <rect x="28" y="112" width="286" height="116" rx="10" class="card"/>
+  <text x="50" y="145" class="tiny">approval_key</text><text x="174" y="145" class="small">CompressedPubKey</text>
+  <text x="50" y="175" class="tiny">rejection_key</text><text x="174" y="175" class="small">CompressedPubKey</text>
+  <text x="50" y="205" class="tiny">consume_key</text><text x="174" y="205" class="small">CompressedPubKey</text>
+  <text x="28" y="270" class="label">CONFIG TREES</text>
+  <rect x="28" y="292" width="286" height="44" rx="7" class="formula"/><text x="48" y="310" class="tiny">Subpool depth 2</text><text x="48" y="326" class="small">approval · rejection · consume · empty</text>
+  <rect x="28" y="352" width="286" height="34" rx="7" class="formula"/><text x="48" y="374" class="small">Root = Merkle(key leaves)</text>
+  <rect x="28" y="402" width="286" height="34" rx="7" class="formula"/><text x="48" y="424" class="small">Main depth 20</text>
+  <text x="48" y="458" class="small">Leaf: H(subpool_root || subpool_id)</text>
+</g>
+
+<!-- Account Address and Account State Tree detail -->
+<g transform="translate(72 696)">
+  <rect width="390" height="92" rx="12" class="card"/>
+  <text x="24" y="32" class="label">ACCOUNT ADDRESS</text>
+  <text x="24" y="64" class="small">subpool_id: F</text>
+  <text x="190" y="64" class="small">public_id: [F; 4]</text>
+</g>
+
+<g transform="translate(524 696)">
+  <rect width="440" height="92" rx="12" class="card"/>
+  <text x="24" y="32" class="label">ACCOUNT STATE TREE</text>
+  <text x="24" y="64" class="small">depth: ACC_AST_DEPTH = 10</text>
+  <text x="238" y="64" class="small">leaf: H(DS_ACC_AST_LEAF || asset_id || amount)</text>
+</g>
+
+<g transform="translate(1026 696)">
+  <rect width="342" height="92" rx="12" class="card"/>
+  <text x="24" y="32" class="label">BATCH SLOT TYPES</text>
+  <text x="24" y="62" class="small">PrivateTx · Deposit · Empty</text>
+  <text x="24" y="82" class="small">Dummy leaves derive from root + index</text>
+</g>
+
+<text x="72" y="874" class="tiny" fill="#aaa">DOXA PROTOCOL</text><text x="1368" y="874" text-anchor="end" class="tiny" fill="#aaa">FIGURE 5 — CORE DATA STRUCTURES</text>
+</svg>
+</div></body></html>
